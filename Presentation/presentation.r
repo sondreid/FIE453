@@ -130,9 +130,12 @@ test_df  <- df[-train_indices, ]
 
 
 perform_svm <- function() {
+    #'Perform SVM on a predetermined depdendent variable, and datasets.
     set.seed(123)
     train_control <- trainControl(method="repeatedcv", number=10, repeats=3, 
-                                  savePredictions = T)
+                                  savePredictions = T,
+                                  classProbs = T)
+    
     svm_model_all_pca <- caret::train(positive_return~.,
                             method = "svmPoly",
                             data = train_df,
@@ -140,6 +143,7 @@ perform_svm <- function() {
                             #preProcess = c("pca"),
                             preProcess = c("center", "scale", "pca"),
                             tunelength = 4,
+                            metric = "ROC",
                             allowParallel=TRUE)
 
 
@@ -275,7 +279,7 @@ levels(train_df$positive_return)=c("Yes","No")
 
 gc_train1 <- train(positive_return~.,
                    data = train_df,
-                   method = c("svmRadial", "svmPoly"),
+                   method = 'svmRadial',
                    # train() use its default method of calculating an analytically derived estimate for sigma
                    tuneLength = 5,# 5 arbitrary values for C and sigma = 25 models
                    trControl = gc_ctrl1,
@@ -324,8 +328,8 @@ produce_roc <- function(model, title,  train_df, test_df) {
   
 }
 produce_roc(gc_train1, "ROC", train_df, test_df)
-
-
+produce_roc(svm_model_all_pca, "ROC", train_df, test_df)
+produce_roc(svm_model_all_pca_radial, "ROC", train_df, test_df)
 
 
 
