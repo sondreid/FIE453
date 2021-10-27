@@ -96,6 +96,18 @@ df %<>%
 
 
 
+### Class Balance of positive returns ###
+# Is accuracy a good performance measure
+
+df %>% ggplot(aes(x = positive_return)) +
+    geom_bar() +
+    scale_colour_manual(values = c("black", "orange")) +
+    theme_bw() +
+    labs(title = "Distribution of positive returns labels",
+         x = "Positive Returns 0/1",
+         y = "Count")
+
+
 
     
 # SVM --------------------------------------------------------------------------
@@ -119,7 +131,8 @@ test_df  <- df[-train_indices, ]
 
 perform_svm <- function() {
     set.seed(123)
-    train_control <- trainControl(method="repeatedcv", number=10, repeats=3)
+    train_control <- trainControl(method="repeatedcv", number=10, repeats=3, 
+                                  savePredictions = T)
     svm_model_all_pca <- caret::train(positive_return~.,
                             method = "svmPoly",
                             data = train_df,
@@ -127,8 +140,6 @@ perform_svm <- function() {
                             #preProcess = c("pca"),
                             preProcess = c("center", "scale", "pca"),
                             tunelength = 4,
-                            classProbs=T,
-                            savePredictions = T,
                             allowParallel=TRUE)
 
 
@@ -139,8 +150,6 @@ perform_svm <- function() {
                             trControl  = train_control, 
                             preProcess = c("center", "scale"),
                             tunelength = 4,
-                            classProbs=T,
-                            savePredictions = T,
                             allowParallel=TRUE)
 
 
@@ -148,7 +157,6 @@ perform_svm <- function() {
     subset_train_df <- train_df %>%
         select(c(positive_return, PRC, VOL, vwretd))
 
-    #df %>% tibble::view()
 
     svm_model_subset_pca <- caret::train(positive_return~.,
                             method = "svmPoly",
@@ -156,8 +164,6 @@ perform_svm <- function() {
                             trControl  = train_control, 
                             #preProcess = c("pca"),
                             preProcess = c("center", "scale", "pca"),
-                            classProbs=T,
-                            savePredictions = T,
                             tunelength = 4)
 
     svm_model_subset_scaled <- caret::train(positive_return~.,
@@ -165,13 +171,11 @@ perform_svm <- function() {
                             data = subset_train_df,
                             trControl  = train_control, 
                             preProcess = c("center", "scale"),
-                            classProbs=T,
-                            savePredictions = T,
                             tunelength = 4)
 
     save(svm_model_all_pca, svm_model_all_scaled, svm_model_subset_pca, svm_model_subset_scaled, file = "svm_model.Rdata")
 }
-perform_svm()
+#perform_svm()
 
 load(file = "svm_model.Rdata")
 
@@ -240,10 +244,94 @@ plot.roc(svm_model_all_pca$pred$obs[selectedIndices],
          svm_model_all_pca$pred$M[selectedIndices])
 
 
-
+selectedIndices <- svm_model_all_pca$pred$mtry == 2
 
 library(ggplot2)
 library(plotROC)
 ggplot(svm_model_all_pca$pred[selectedIndices, ], 
        aes(m = M, d = factor(obs, levels = c("R", "M")))) + 
     geom_roc(hjust = -0.4, vjust = 1.5) + coord_equal()
+
+
+
+
+roc_svm_test <- roc(response = svm_model_all_pca$trainingData, predictor =as.numeric(preds_svm_model_all_pca))
+plot(roc_svm_test, add = TRUE,col = "red", print.auc=TRUE, print.auc.x = 0.5, print.auc.y = 0.3)
+legend
+
+
+
+
+
+gc_ctrl1 <- trainControl(method = "repeatedcv",
+                         number = 5,
+                         repeats = 5,
+                         classProbs = TRUE,
+                         summaryFunction = twoClassSummary,
+                         savePredictions = TRUE)
+
+
+levels(train_df$positive_return)=c("Yes","No")
+
+gc_train1 <- train(positive_return~.,
+                   data = train_df,
+                   method = c("svmRadial", "svmPoly"),
+                   # train() use its default method of calculating an analytically derived estimate for sigma
+                   tuneLength = 5,# 5 arbitrary values for C and sigma = 25 models
+                   trControl = gc_ctrl1,
+                   preProc = c("center", "scale"),
+                   metric = "ROC",
+                   verbose = FALSE)
+
+max(gc_train1$results[,"ROC"])
+
+
+
+
+# ROC using pROC
+gc_prob <- predict(gc_train1, newdata = test_df %>% select(-positive_return), type = "prob")
+gc_pROC <- roc(response = test_df$positive_return, predictor = gc_prob[, "Yes"])
+plot(gc_pROC)
+gc_pROC$auc
+# Area under the curve: 0.8376
+
+
+ROC_df <- tibble(x = gc_pROC$specificities  , y = gc_pROC$sensitivities) %>% 
+    mutate(fpr = 1- x)
+
+
+ROC_df <- tibble(fpr =  1- gc_pROC$specificities  , Specificity = gc_pROC$sensitivities)
+
+ROC_df %>% ggplot() + 
+  geom_line(aes(x = fpr, y = Specificity, color = "Specificity/fpr")) + 
+  geom_abline(slope =  1) +
+  theme_classic()
+
+
+
+produce_roc <- function(model, title,  train_df, test_df) {
+  #'
+  #'
+  gc_prob <- predict(model, newdata = test_df, type = "prob")
+  gc_pROC <- roc(response = test_df$positive_return, predictor = gc_prob[, "Yes"])
+  ROC_df <- tibble(fpr =  1- gc_pROC$specificities  , tpr = gc_pROC$sensitivities)
+  ROC_df %>% ggplot() + 
+    geom_line(aes(x = fpr, y = tpr, colour = "specificity/fpr")) + 
+    geom_abline(slope =  1, colour = "random prediction") +
+    theme_classic() +
+    labs(title = title, x = "False Positive Rate", y = "True Positive Rate")
+  
+  
+}
+produce_roc(gc_train1, "ROC", train_df, test_df)
+
+
+
+
+
+# ROC using plotROC (ggplot2 extension)
+gc_prob_ex <- extractProb(list(gc_train1), test_df %>% select(-positive_return))
+gc_ggROC <- ggplot::plotROC(gc_prob_ex, aes(d=obs, m=Good)) + geom_roc() 
+gc_ggROC_styled <- gc_ggROC +  annotate("text", x = .75, y = .25, 
+                                        label = paste("AUC =", round(calc_auc(gc_ggROC)$AUC, 2)))
+gc_ggROC_styled
