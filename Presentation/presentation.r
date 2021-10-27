@@ -13,6 +13,9 @@
     require(caret)
     require(kableExtra)
     require(yardstick)
+    require(ggplot2)
+    require(plotROC)
+    require(pROC)
 
 # Load data
 load("merged.Rdata")
@@ -240,32 +243,6 @@ make_table(test_df$positive_return, preds_svm_model_subset_scaled, "All variable
 
 
 
-library(pROC)
-# Select a parameter setting
-selectedIndices <- svm_model_all_pca$pred$mtry == 2
-# Plot:
-plot.roc(svm_model_all_pca$pred$obs[selectedIndices],
-         svm_model_all_pca$pred$M[selectedIndices])
-
-
-selectedIndices <- svm_model_all_pca$pred$mtry == 2
-
-library(ggplot2)
-library(plotROC)
-ggplot(svm_model_all_pca$pred[selectedIndices, ], 
-       aes(m = M, d = factor(obs, levels = c("R", "M")))) + 
-    geom_roc(hjust = -0.4, vjust = 1.5) + coord_equal()
-
-
-
-
-roc_svm_test <- roc(response = svm_model_all_pca$trainingData, predictor =as.numeric(preds_svm_model_all_pca))
-plot(roc_svm_test, add = TRUE,col = "red", print.auc=TRUE, print.auc.x = 0.5, print.auc.y = 0.3)
-legend
-
-
-
-
 
 gc_ctrl1 <- trainControl(method = "repeatedcv",
                          number = 5,
@@ -292,50 +269,24 @@ max(gc_train1$results[,"ROC"])
 
 
 
-# ROC using pROC
-gc_prob <- predict(gc_train1, newdata = test_df %>% select(-positive_return), type = "prob")
-gc_pROC <- roc(response = test_df$positive_return, predictor = gc_prob[, "Yes"])
-plot(gc_pROC)
-gc_pROC$auc
-# Area under the curve: 0.8376
 
-
-ROC_df <- tibble(x = gc_pROC$specificities  , y = gc_pROC$sensitivities) %>% 
-    mutate(fpr = 1- x)
-
-
-ROC_df <- tibble(fpr =  1- gc_pROC$specificities  , Specificity = gc_pROC$sensitivities)
-
-ROC_df %>% ggplot() + 
-  geom_line(aes(x = fpr, y = Specificity, color = "Specificity/fpr")) + 
-  geom_abline(slope =  1) +
-  theme_classic()
-
-
-
-produce_roc <- function(model, title,  train_df, test_df) {
-  #'
-  #'
+produce_roc <- function(model, title, test_df) {
+  #' Function which produces a ROC plot based on the input model, title and
+  #' datasets
   gc_prob <- predict(model, newdata = test_df, type = "prob")
   gc_pROC <- roc(response = test_df$positive_return, predictor = gc_prob[, "Yes"])
   ROC_df <- tibble(fpr =  1- gc_pROC$specificities  , tpr = gc_pROC$sensitivities)
   ROC_df %>% ggplot() + 
     geom_line(aes(x = fpr, y = tpr, colour = "specificity/fpr")) + 
-    geom_abline(slope =  1, colour = "random prediction") +
+    geom_abline(slope =  1) +
     theme_classic() +
     labs(title = title, x = "False Positive Rate", y = "True Positive Rate")
   
   
 }
-produce_roc(gc_train1, "ROC", train_df, test_df)
-produce_roc(svm_model_all_pca, "ROC", train_df, test_df)
-produce_roc(svm_model_all_pca_radial, "ROC", train_df, test_df)
+produce_roc(gc_train1, "ROC", test_df)
+produce_roc(svm_model_all_pca, "ROC", test_df)
 
 
+produce_roc(svm_model_all_pca_radial, "ROC", test_df)
 
-# ROC using plotROC (ggplot2 extension)
-gc_prob_ex <- extractProb(list(gc_train1), test_df %>% select(-positive_return))
-gc_ggROC <- ggplot::plotROC(gc_prob_ex, aes(d=obs, m=Good)) + geom_roc() 
-gc_ggROC_styled <- gc_ggROC +  annotate("text", x = .75, y = .25, 
-                                        label = paste("AUC =", round(calc_auc(gc_ggROC)$AUC, 2)))
-gc_ggROC_styled
