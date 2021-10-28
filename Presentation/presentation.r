@@ -85,7 +85,7 @@ non_numeric_strict <-
                  "derlltq",
                  "fyr")
 
-
+# Remove non-numeric variables
 df %<>% 
     select(-one_of(non_numeric))
 
@@ -111,10 +111,15 @@ df %>% ggplot(aes(x = positive_return)) +
          y = "Count")
 
 
+# Convert class labels
+
+levels(df$positive_return)=c("Yes","No")
 
     
 # SVM --------------------------------------------------------------------------
 # Size of the train-test split and number of observations in data frame
+
+
 
 
 ### Split train and test data
@@ -123,6 +128,8 @@ n <- nrow(df)
 train_indices <- sample(1:n, size = floor(n*size))
 train_df <- df[train_indices, ]
 test_df  <- df[-train_indices, ]
+
+
 
 
 
@@ -137,6 +144,7 @@ perform_svm <- function() {
     set.seed(123)
     train_control <- trainControl(method="repeatedcv", number=10, repeats=3, 
                                   savePredictions = T,
+                                  summaryFunction = twoClassSummary,
                                   classProbs = T)
     
     svm_model_all_pca <- caret::train(positive_return~.,
@@ -157,7 +165,30 @@ perform_svm <- function() {
                             trControl  = train_control, 
                             preProcess = c("center", "scale"),
                             tunelength = 4,
+                            metric = "ROC",
                             allowParallel=TRUE)
+    
+    
+    svm_radial_model_all_pca <- caret::train(positive_return~.,
+                                      method = "svmRadial",
+                                      data = train_df,
+                                      trControl  = train_control, 
+                                      #preProcess = c("pca"),
+                                      preProcess = c("center", "scale", "pca"),
+                                      tunelength = 4,
+                                      metric = "ROC",
+                                      allowParallel=TRUE)
+    
+    
+    
+    svm_radial_model_all_scaled <- caret::train(positive_return~.,
+                                         method = "svmRadial",
+                                         data = train_df,
+                                         trControl  = train_control, 
+                                         preProcess = c("center", "scale"),
+                                         tunelength = 4,
+                                         metric = "ROC",
+                                         allowParallel=TRUE)
 
 
     ###### Modelling only few features #####
@@ -165,35 +196,30 @@ perform_svm <- function() {
         select(c(positive_return, PRC, VOL, vwretd))
 
 
-    svm_model_subset_pca <- caret::train(positive_return~.,
-                            method = "svmPoly",
-                            data = subset_train_df,
-                            trControl  = train_control, 
-                            #preProcess = c("pca"),
-                            preProcess = c("center", "scale", "pca"),
-                            tunelength = 4)
-
     svm_model_subset_scaled <- caret::train(positive_return~.,
                             method = "svmPoly",
                             data = subset_train_df,
                             trControl  = train_control, 
                             preProcess = c("center", "scale"),
-                            tunelength = 4)
+                            tunelength = 4, 
+                            metric = "ROC",
+                            allowParallel=TRUE)
+    
+    svm_radial_model_subset_scaled <- caret::train(positive_return~.,
+                                            method = "svmRadial",
+                                            data = subset_train_df,
+                                            trControl  = train_control, 
+                                            preProcess = c("center", "scale"),
+                                            tunelength = 4, 
+                                            metric = "ROC",
+                                            allowParallel=TRUE)
 
-    save(svm_model_all_pca, svm_model_all_scaled, svm_model_subset_pca, svm_model_subset_scaled, file = "svm_model.Rdata")
+    save(svm_model_all_pca, svm_model_all_scaled, svm_radial_model_all_pca,
+         svm_radial_model_all_scaled,  svm_model_subset_scaled, svm_radial_model_subset_scaled, file = "svm_model.Rdata")
 }
 #perform_svm()
 
 load(file = "svm_model.Rdata")
-
-
-
-# Predicting with all the variables
-preds_svm_model_all_pca <- predict(svm_model_all_pca, newdata = test_df)
-preds_svm_model_all_scaled <- predict(svm_model_all_scaled, newdata = test_df)
-preds_svm_model_subset_pca <- predict(svm_model_subset_pca, newdata = test_df)
-preds_svm_model_subset_scaled <- predict(svm_model_subset_scaled, newdata = test_df)
-
 
 
 
@@ -224,47 +250,38 @@ make_table <- function(obs, preds, model_name) {
 }
 
 ## ALL PCA
-plot_confusion_matrix(test_df$positive_return, preds_svm_model_all_pca)
-make_table(test_df$positive_return, preds_svm_model_all_pca, "All variables PCA reduced")
+plot_confusion_matrix(test_df$positive_return, predict(svm_model_all_pca, test_df))
+make_table(test_df$positive_return, predict(svm_model_all_pca, test_df), "All variables PCA reduced using polynomial kernel")
 
-## Subset PCA
-plot_confusion_matrix(test_df$positive_return, preds_svm_model_subset_pca)
-make_table(test_df$positive_return, preds_svm_model_subset_pca, "Subset of variables PCA reduced")
+## ALL PCA Radial kernel
+plot_confusion_matrix(test_df$positive_return, predict(svm_radial_model_all_pca,test_df))
+make_table(test_df$positive_return, predict(svm_radial_model_all_pca, test_df), "All variables PCA reduced using radial kernel")  %>% 
+  save_kable(file = "images/PCA_radial_all_variables.png", density = 2000, zoom = 3)
+
 
 
 ## All scaled
-plot_confusion_matrix(test_df$positive_return, preds_svm_model_all_scaled)
-make_table(test_df$positive_return, preds_svm_model_all_scaled, "All variables scaled")
+plot_confusion_matrix(test_df$positive_return, predict(svm_model_all_scaled, test_df))
+make_table(test_df$positive_return, predict(svm_model_all_scaled, test_df), "All variables scaled using polynomial kernel")  %>% 
+  save_kable(file = "images/scaled_all_variables.png", density = 2000, zoom = 3)
+
+
+
+## All scaled radial
+plot_confusion_matrix(test_df$positive_return, predict(svm_radial_model_all_scaled, test_df))
+make_table(test_df$positive_return, predict(svm_radial_model_all_scaled, test_df), "All variables scaled")
 
 
 ## Subset scaled
-plot_confusion_matrix(test_df$positive_return, preds_svm_model_subset_scaled)
-make_table(test_df$positive_return, preds_svm_model_subset_scaled, "All variables scaled")
+plot_confusion_matrix(test_df$positive_return, predict(svm_model_subset_scaled, test_df))
+make_table(test_df$positive_return, predict(svm_model_subset_scaled, test_df), "Subset of variables scaled using polynomial")
 
 
+## Subset scaled using radial kernel
+plot_confusion_matrix(test_df$positive_return, predict(svm_radial_model_subset_scaled, test_df))
+make_table(test_df$positive_return, predict(svm_radial_model_subset_scaled, test_df), "Subset of variables scaled using radial kernel") %>% 
+  save_kable(file = "images/scaled_subset_radial.png", density = 2000, zoom = 3)
 
-
-gc_ctrl1 <- trainControl(method = "repeatedcv",
-                         number = 5,
-                         repeats = 5,
-                         classProbs = TRUE,
-                         summaryFunction = twoClassSummary,
-                         savePredictions = TRUE)
-
-
-levels(train_df$positive_return)=c("Yes","No")
-
-gc_train1 <- train(positive_return~.,
-                   data = train_df,
-                   method = 'svmRadial',
-                   # train() use its default method of calculating an analytically derived estimate for sigma
-                   tuneLength = 5,# 5 arbitrary values for C and sigma = 25 models
-                   trControl = gc_ctrl1,
-                   preProc = c("center", "scale"),
-                   metric = "ROC",
-                   verbose = FALSE)
-
-max(gc_train1$results[,"ROC"])
 
 
 
@@ -272,7 +289,7 @@ max(gc_train1$results[,"ROC"])
 
 produce_roc <- function(model, title, test_df) {
   #' Function which produces a ROC plot based on the input model, title and
-  #' datasets
+  #' datasets.
   gc_prob <- predict(model, newdata = test_df, type = "prob")
   gc_pROC <- roc(response = test_df$positive_return, predictor = gc_prob[, "Yes"])
   ROC_df <- tibble(fpr =  1- gc_pROC$specificities  , tpr = gc_pROC$sensitivities)
@@ -284,9 +301,20 @@ produce_roc <- function(model, title, test_df) {
   
   
 }
-produce_roc(gc_train1, "ROC", test_df)
+
+
 produce_roc(svm_model_all_pca, "ROC", test_df)
+produce_roc(svm_model_all_scaled, "ROC scaled and centered. All variables", test_df)
 
 
-produce_roc(svm_model_all_pca_radial, "ROC", test_df)
+# Radial PCA all variables
+produce_roc(svm_radial_model_all_pca, "SVM model using radial kernel PCA reduced", test_df)
 
+# Poly PCA all variables
+produce_roc(svm_model_all_pca, "ROC poly kernel PCA reduced", test_df)
+
+
+# Radial
+produce_roc(svm_radial_model_subset_scaled, "ROC Radial on poly", test_df)
+# Poly
+produce_roc(svm_model_subset_scaled, "ROC", test_df)
