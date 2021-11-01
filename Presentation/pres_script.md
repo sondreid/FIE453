@@ -11,11 +11,20 @@ The goal of the Principal Component Analysis is to reduce the variables into a f
 
 
 ## Accuracy measure:
-    There
+    Accuracy
 
 
 
 ## On the performance of the models
 
+
+### Model 1
+Our first model is tested using PCA reduced dimensions of all variables. PCA allows us to use find the most variance in the dimensions used in our model.
+Allows for compactness of an otherwise infeasible model search space. 
+
+
+Preciscion:
+    Relatively low preciscion.
+    Indicating that too many  
 
 
