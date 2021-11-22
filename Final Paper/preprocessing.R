@@ -166,12 +166,17 @@ df %<>%
 # Random Forest ----------------------------------------------------------------
 library(randomForest)
 library(caret)
+library(doParallel)
+cl <- makePSOCKcluster(5)
+registerDoParallel(cl)
+
+
+
 y <- df$retx
 x <- df %>% select(-retx)
 
-control <- trainControl(method = "repeatedcv",
+control <- trainControl(method = "cv",
                         number = 5,
-                        repeats = 3,
                         verboseIter = TRUE)
 
 set.seed(1)
@@ -188,6 +193,8 @@ rf <- train(x, y,
             tuneGrid = tunegrid,
             trControl = control)
 end_time <- Sys.time()
+
+stopCluster(cl)
 
 # Most important features
 varImp(rf)
