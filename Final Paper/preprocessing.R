@@ -163,3 +163,29 @@ df %<>%
     replace_NA_with_mean(print_replaced_cols = T)
 
 
+# Random Forest ----------------------------------------------------------------
+library(randomForest)
+library(caret)
+y <- df$retx
+x <- df %>% select(-retx)
+
+control <- trainControl(method = "repeatedcv",
+                        number = 5,
+                        repeats = 3,
+                        verboseIter = TRUE)
+
+set.seed(1)
+
+mtry <- sqrt(ncol(x))
+
+tunegrid <- expand.grid(.mtry = mtry)
+
+
+start_time <- Sys.time()
+rf <- train(x, y,
+            method = "rf",
+            importance = TRUE,
+            tuneGrid = tunegrid,
+            trControl = control)
+end_time <- Sys.time()
+
