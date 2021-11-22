@@ -2,6 +2,7 @@
 source("data_exploration.r")
 # Libraries
 library(keras)
+library(caret)
 
 
 #' Using the training datasets, train and validate using either cross validation or holdout
@@ -9,3 +10,15 @@ library(keras)
 #' to train and validate all models, we can settle for hold-out validation..
 #' 
 #' When the models have been 
+#' 
+#' 
+#' 
+#' 
+
+
+
+
+
+
+### SVM model ###
+
