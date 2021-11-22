@@ -5,7 +5,7 @@
 # Libraries --------------------------------------------------------------------
 library(tidyverse)
 library(magrittr)
-
+library(tidymodels)
 
 
 
@@ -30,9 +30,11 @@ merged %<>% rename_with(tolower)
 permno_top <- (merged %>% 
     select(permno) %>% 
     unique() %>% 
-    head(100))$permno
+    head(1000))$permno
 
 df <- merged %>% filter(permno %in% permno_top)
+
+
 
 
 # Feature selection functions --------------------------------------------------
@@ -49,7 +51,7 @@ remove_cols_only_zero_and_NA <- function(df, print_removed_cols = F) {
     
     if(print_removed_cols) cat("Columns removed: ", cols, "\n")
     
-    return (out_df %>% select(-cols))
+    return (df %>% select(-cols))
 }
 
 
@@ -76,31 +78,63 @@ remove_NA <- function(df, ratio, print_removed_cols = F){
 
 
 
+remove_nzv <- function(df, print_removed_cols = F){
+    
+    #'@description Function that removes near zero variance columns
+    #'             
+    #'@param df    Passing a data frame
+    #'@param print_removed_cols True if user want to print removed columns
+    #'@return      Data frame without columns near zero variance columns
+    
+    rec <- recipe(retx ~ ., 
+                  data = df)
+    
+    cols <- (rec %>% 
+                step_nzv(all_predictors()) %>% 
+                prep(df) %>% 
+                tidy(number = 1))$terms
+    
+    if(print_removed_cols) cat("Columns removed: ", cols, "\n")
+    
+    return(df %>% select(-cols))
+}
 
-test_df <- df %>% remove_cols_only_zero_and_NA(T) %>% remove_NA(0.2, T)
 
 
+remove_hcv <- function(df, threshold = 0.9, print_removed_cols = F){
+    
+    #'@description Function that removes highly correlated features
+    #'             
+    #'@param df    Passing a data frame
+    #'@param treshold Correlation beneath this treshold
+    #'@param print_removed_cols True if user want to print removed columns
+    #'@return      Data frame without highly correlated features
+    
+    
+    
+    numeric_cols <- df %>% lapply(is.numeric) %>% unlist()
+    
+    rec <- recipe(retx ~ ., 
+                  data = df[numeric_cols])
+    
+    cols <- (rec %>% 
+                 step_corr(all_predictors(),
+                           threshold = threshold) %>% 
+                 prep(df[numeric_cols]) %>% 
+                 tidy(number = 1))$terms
+    
+    if(print_removed_cols) cat("Columns removed: ", cols, "\n")
+    
+    return(df %>% select(-cols))
+}
 
 
-
-
-###### EITHER FULLY MERGED SET OR A REDUCED DATASET
-
-# Filtering the data frame containing only the 100 first companies
-df_reduced <- merged %>% 
-    filter(PERMNO %in% permno$PERMNO) %>% 
-    remove_zero_and_NA(0.3) %>% 
-    filter(!is.na(RETX)) %>% 
-    select_if(negate(is.character)) # Remove factors and character variables
-
-
-
-
-
-# This has to be done piecewise to preserve memory if we intend to try to use all rows
-merged %<>% 
-    remove_all_zero_columns() %>%
-    remove_all_duplicates()
+# Testing function on data frame
+df %<>% 
+    remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
+    remove_NA(0.2, print_removed_cols = T) %>% 
+    remove_nzv(print_removed_cols = T) %>% 
+    remove_hcv(0.9, print_removed_cols = T)
 
 
 
