@@ -11,6 +11,8 @@ library(tsibble)
 library(Keras)
 library(readr)
 library(kableExtra)
+library(leaps)
+
 
 load("data/merged.Rdata")
 read_compustat_crsp <- function() {
@@ -29,56 +31,33 @@ load(file = "cached_data/column_names.Rdata")
 permno <- merged %>% 
   select(PERMNO) %>% 
   unique() %>% 
-  head(100)
+  head(1000)
 
-
-remove_all_zero_columns <- function(df) {
-  df[is.na(df)] <- 0
-  columns <- df %>% apply(MARGIN = 2, FUN = function(x) all(x == 0)) %>% 
-    as.data.frame() %>% 
-    filter(. == FALSE) %>% 
-    rownames()
-  return (df %>% select(all_of(columns)))
-}
-
-remove_all_duplicates <- function(df) {
-  columns <- df %>% 
-    apply(MARGIN = 2, FUN = function(x) if(length(c(unique(x))) == 1) return(FALSE) else return(TRUE)) %>% 
-    as.data.frame() %>% 
-    filter(. == TRUE) %>% 
-    rownames()
-  
-  return (df %>% select(all_of(columns)))
-}
-
-ratio <- 0.5
-df <- df_reduced
 
 remove_zero_and_NA <- function(df, ratio) {
   #'
   #'@ratio: ratio of NA's which a column of data cannot exceed
-  cols <- df %>% apply(MARGIN = 2, function(x) sum(is.na(x) | x == 0, na.rm = T)/length(x)) 
+  
+  out_df <- df 
+  df[is.na(df)] <- 0
+  cols <- df %>% apply(MARGIN = 2, function(x) sum(x==0, na.rm = T)/length(x)) 
   cols <- cols[cols < ratio] %>% as.data.frame() %>% rownames() 
   
   return (
-    df %>% select(cols)
+    out_df %>% select(cols)
   )
 }
-
-
-
-
-# Filtering the data frame containing only the 10 first companies
-df_reduced <- merged %>% 
-  filter(PERMNO %in% permno$PERMNO)
-
+test_df <- df %>% remove_zero_and_NA(0.5)
 
 ###### EITHER FULLY MERGED SET OR A REDUCED DATASET
 
-test <-df_reduced %>% 
-  remove_all_zero_columns() %>%
-  remove_all_duplicates() %>% 
-  remove_zero_and_NA(0.3)
+# Filtering the data frame containing only the 100 first companies
+df_reduced <- merged %>% 
+  filter(PERMNO %in% permno$PERMNO) %>% 
+  remove_zero_and_NA(0.3) %>% 
+  filter(!is.na(RETX)) %>% 
+  select_if(negate(is.character)) # Remove factors and character variables
+
 
 
 
@@ -89,6 +68,13 @@ merged %<>%
   remove_all_duplicates()
 
 
+
+### Subset selection
+
+
+
+subset_of_variabels <-  regsubsets(RETX~., df_reduced )
+summary(subset_of_variabels)
 
 
 
