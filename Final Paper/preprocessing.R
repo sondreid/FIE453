@@ -136,7 +136,7 @@ replace_NA_with_mean <- function(df, print_replaced_cols = F){
     #'@description Function that replaces NA with column means
     #'             
     #'@param df    Passing a data frame
-    #'@param print_removed_cols True if user want to print removed columns
+    #'@param print_replaced_cols True if user want to print replaced columns
     #'@return      Data frame NA-replaced column means
     
     na_cols <- df %>% apply(MARGIN = 2, function(x) any(is.na(x)))
@@ -189,5 +189,5 @@ rf <- train(x, y,
             trControl = control)
 end_time <- Sys.time()
 
-# Most important featurs
+# Most important features
 varImp(rf)
