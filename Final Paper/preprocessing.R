@@ -49,7 +49,7 @@ remove_cols_only_zero_and_NA <- function(df, print_removed_cols = F) {
     cols <- df %>% apply(MARGIN = 2, function(x) (sum(x==0, na.rm = T) + sum(is.na(x)))/length(x))
     cols <- cols[cols == 1] %>% as.data.frame() %>% rownames() 
     
-    if(print_removed_cols) cat("Columns removed: ", cols, "\n")
+    if(print_removed_cols) cat("Columns removed: ", cols, "\n\n")
     
     return (df %>% select(-cols))
 }
@@ -70,7 +70,7 @@ remove_NA <- function(df, ratio, print_removed_cols = F){
     cols <- df %>% apply(MARGIN = 2, function(x) sum(is.na(x))/length(x))
     cols <- cols[cols >= ratio] %>% as.data.frame() %>% rownames() 
     
-    if(print_removed_cols) cat("Columns removed: ", cols, "\n")
+    if(print_removed_cols) cat("Columns removed: ", cols, "\n\n")
     
     return(df %>% select(-cols))
 }
@@ -94,7 +94,7 @@ remove_nzv <- function(df, print_removed_cols = F){
                 prep(df) %>% 
                 tidy(number = 1))$terms
     
-    if(print_removed_cols) cat("Columns removed: ", cols, "\n")
+    if(print_removed_cols) cat("Columns removed: ", cols, "\n\n")
     
     return(df %>% select(-cols))
 }
@@ -123,19 +123,43 @@ remove_hcv <- function(df, threshold = 0.9, print_removed_cols = F){
                  prep(df[numeric_cols]) %>% 
                  tidy(number = 1))$terms
     
-    if(print_removed_cols) cat("Columns removed: ", cols, "\n")
+    if(print_removed_cols) cat("Columns removed: ", cols, "\n\n")
     
     return(df %>% select(-cols))
 }
 
 
-# Testing function on data frame
+
+
+replace_NA_with_mean <- function(df, print_replaced_cols = F){
+    
+    #'@description Function that replaces NA with column means
+    #'             
+    #'@param df    Passing a data frame
+    #'@param print_removed_cols True if user want to print removed columns
+    #'@return      Data frame NA-replaced column means
+    
+    na_cols <- df %>% apply(MARGIN = 2, function(x) any(is.na(x)))
+    numeric_cols <- df[na_cols] %>% lapply(is.numeric) %>% unlist() 
+    col_means <- df[na_cols] %>% colMeans(na.rm = T)
+    col_names <- col_means %>% names()
+    
+    for (col in col_names){
+        df[col] <- df[col][[1]] %>% replace_na(col_means[col])
+    }
+    
+    if(print_replaced_cols) cat("Columns replaced: ", col_names, "\n\n")
+    
+    return(df)
+}
+
+
+# Testing ----------------------------------------------------------------------
 df %<>% 
     remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
     remove_NA(0.2, print_removed_cols = T) %>% 
     remove_nzv(print_removed_cols = T) %>% 
-    remove_hcv(0.9, print_removed_cols = T)
-
-
+    remove_hcv(0.9, print_removed_cols = T) %>% 
+    replace_NA_with_mean(print_replaced_cols = T)
 
 
