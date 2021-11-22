@@ -189,3 +189,5 @@ rf <- train(x, y,
             trControl = control)
 end_time <- Sys.time()
 
+# Most important featurs
+varImp(rf)
