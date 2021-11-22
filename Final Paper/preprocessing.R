@@ -2,26 +2,22 @@
 ########################### Pre-processing #####################################
 ################################################################################
 
+# Libraris
+library(tidyverse)
+library(magrittr)
 
+# Set WD
+setwd("~/OneDrive - Norges Handelshøyskole/MASTER/FIE453/FinalExam/FIE453/Final Paper")
 
-
-# Load Merged data set
+# Load and read data
 load("data/merged.Rdata")
+company_names_df <- read.csv(file = "data/names.csv")
+feature_names_df <- read.delim(file = "data/compustat-fields.txt")    
+company_names_df %<>% rename_with(tolower)
+feature_names_df %<>% rename_with(tolower) 
+merged %<>% rename_with(tolower)
 
 
-
-
-read_compustat_crsp <- function() {
-    crsp_df <- read_csv("data/crsp.csv")
-    compustat_df <- read_csv("data/compustat.csv")
-    
-    compustat_columns <- colnames(compustat_df) %>% as_tibble()
-    crsp_columns <- colnames(crsp_df) %>% as_tibble()
-    
-    save(compustat_columns, crsp_columns, file = "cached_data/column_names.Rdata")
-}
-#read_compustat_crsp()
-load(file = "cached_data/column_names.Rdata")
 
 # Subset of 100 companies
 permno <- merged %>% 
