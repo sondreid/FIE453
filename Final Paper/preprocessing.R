@@ -9,7 +9,7 @@ library(tidymodels)
 library(randomForest)
 library(caret)
 library(doParallel)
-
+library(MLmetrics)
 
 
 # Set WD -----------------------------------------------------------------------
@@ -24,7 +24,8 @@ load("data/merged.Rdata")
 feature_names_df <- read.delim(file = "descriptions/compustat-fields.txt")    
 #company_names_df %<>% rename_with(tolower)
 #feature_names_df %<>% rename_with(tolower) 
-merged %<>% rename_with(tolower)
+merged %<>% rename_with(tolower) %>% 
+    select(-ret) # remove returns not adjusted for dividends
 
 
 
@@ -270,11 +271,19 @@ registerDoParallel(cl)
 #y <- train_df_reduced$retx
 #x <- train_df_reduced %>% select(-retx)
 
+
+
+expanded_summary  <- function(data, lev = NULL, model = NULL){
+    a1 <- defaultSummary(data, lev, model)
+    c1 <- prSummary(data, lev, model)
+    out <- c(a1, b1, c1)
+    out}
+
 train_control <- trainControl(method = "cv",
                         number = 5,
-                        verboseIter = TRUE,
-                        classProbs = TRUE, 
-                        summaryFunction = twoClassSummary)
+                        verboseIter = T,
+                        savePredictions = T,
+                        summaryFunction = defaultSummary )
 
 # Random Forest ----------------------------------------------------------------
 set.seed(1)
@@ -285,7 +294,8 @@ tunegrid_rf <- expand.grid(.mtry = 2)
 
 
 start_time <- Sys.time()
-rf <- train(x, y,
+rf <- train(retx~.,
+            data = train_df_reduced,
             method = "rf",
             importance = TRUE,
             tuneGrid = tunegrid_rf,
@@ -299,19 +309,22 @@ varImp(rf)
 # Should be far faster than RF, SVM, etc
 
 
-tunegrid_knn <- expand.grid(k = 5:10)
+tunegrid_knn <- expand.grid(k = 5:25)
 
 
-knn <- train(retx~,
+knn <- train(retx~.,
              data = train_df_reduced,
+             trControl  = train_control,
              method = "knn",
+             metric = "MAE", # Which metric makes the most sense to use RMSE or MAE. Leaning towards MAE
              tunegrid = tunegrid_knn,
-             trControl = train_control,
-             preProcess = c("center","scale"),
+             preProcess = c("center","scale", "pca"),
              allowParalell=TRUE)
 
 
 knn
+
+knn$results$MAE %>% min() # Validation accuracy
 summary(knn)
 
 
@@ -319,19 +332,19 @@ summary(knn)
 # SVM ----------------------------------------------------------------
 
 
-tunegrid_svm
+tunegrid_svm <- expand.grid(C = seq(0, 2, length = 20)) # Try variations of margin C
 
-svm_model_all_pca <- caret::train(retx~,
+svm                    <- caret::train(retx~.,
                                   data = train_df_reduced,
                                   method = "svmRadial",
-                                  data = train_df,
                                   trControl  = train_control, 
+                                  tunegrid = tunegrid_svm,
                                   preProcess = c("center", "scale", "pca"),
                                   allowParallel=TRUE)
 
 
 
-
+svm$results$MAE %>% min() # Validation accuracy
 
 # Stop cluster
 stopCluster(cl)
