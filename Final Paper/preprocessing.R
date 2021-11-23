@@ -24,9 +24,13 @@ load("data/merged.Rdata")
 feature_names_df <- read.delim(file = "descriptions/compustat-fields.txt")    
 #company_names_df %<>% rename_with(tolower)
 #feature_names_df %<>% rename_with(tolower) 
-merged %<>% rename_with(tolower) %>% 
-    select(-ret) # remove returns not adjusted for dividends
+merged %<>% rename_with(tolower) 
 
+
+## Variables that cannot be inclduded with dependent variable RETX
+
+exlcluded_variables <- c("ret", "prc", "vwretd") # vwretd: market excess return
+merged %<>% select(-exlcluded_variables)
 
 
 
