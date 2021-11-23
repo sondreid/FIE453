@@ -157,6 +157,45 @@ replace_NA_with_mean <- function(df, print_replaced_cols = F){
 }
 
 
+
+
+#### Functions for model analysis ##############################################
+
+
+
+plot_confusion_matrix <- function(obs, preds) {
+    #' @description: Function that plots confusion matrix 
+    #' @obs: Observations in vector format
+    #' @preds: predictions in vector format
+    conf_data <- tibble(obs = obs, preds =preds )
+    confusion_matrix <- conf_mat(conf_data, truth = "obs", estimate = "preds")
+    autoplot(confusion_matrix, type = "heatmap") +
+        theme(text = element_text(size = 25))    
+}
+
+
+
+
+make_table <- function(obs, preds, model_name) {
+    #' @description: Function that produces a table of performance metrics: Accuracy, preciscion and recall
+    #' @obs: Observations in vector format
+    #' @preds: predictions in vector format
+    #' @return: A dataframe 
+    obs <- as.factor(obs)
+    preds <- as.factor(preds)
+    table_df <- tibble("Accuracy" = confusionMatrix(preds, obs)[[3]][1], 
+                       "Recall" = caret::recall(table(obs, preds)),
+                       "Preciscion" = caret::precision(table(obs, preds)))  %>% 
+        t()  
+    colnames(table_df) <- "Measure"
+    table_df  %<>% 
+        kbl(caption = model_name)  %>% 
+        kable_classic(full_width = F, html_font = "Times New Roman")
+    return (table_df)
+}
+
+ #####################
+
 # Testing ----------------------------------------------------------------------
 df_reduced %<>% 
     remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
@@ -164,9 +203,6 @@ df_reduced %<>%
     remove_nzv(print_removed_cols = T) %>% 
     remove_hcv(0.9, print_removed_cols = T) %>% 
     replace_NA_with_mean(print_replaced_cols = T)
-
-
-
 
 
 
@@ -231,12 +267,14 @@ registerDoParallel(cl)
 
 
 
-y <- train_df_reduced$retx
-x <- train_df_reduced %>% select(-retx)
+#y <- train_df_reduced$retx
+#x <- train_df_reduced %>% select(-retx)
 
 train_control <- trainControl(method = "cv",
                         number = 5,
-                        verboseIter = TRUE)
+                        verboseIter = TRUE,
+                        classProbs = TRUE, 
+                        summaryFunction = twoClassSummary)
 
 # Random Forest ----------------------------------------------------------------
 set.seed(1)
@@ -261,14 +299,43 @@ varImp(rf)
 # Should be far faster than RF, SVM, etc
 
 
-tunegrid_knn <- expand.grid(.mtry = 2)
+tunegrid_knn <- expand.grid(k = 5:10)
+
+
+knn <- train(retx~,
+             data = train_df_reduced,
+             method = "knn",
+             tunegrid = tunegrid_knn,
+             trControl = train_control,
+             preProcess = c("center","scale"),
+             allowParalell=TRUE)
+
+
+knn
+summary(knn)
+
+
+
+# SVM ----------------------------------------------------------------
+
+
+tunegrid_svm
+
+svm_model_all_pca <- caret::train(retx~,
+                                  data = train_df_reduced,
+                                  method = "svmRadial",
+                                  data = train_df,
+                                  trControl  = train_control, 
+                                  preProcess = c("center", "scale", "pca"),
+                                  allowParallel=TRUE)
 
 
 
 
 
-
+# Stop cluster
 stopCluster(cl)
+
 
 
 
