@@ -84,27 +84,52 @@ perform_train_validate_split <- function(df, train_ratio = 0.6, test_ratio = 0.5
   #' @df:    The dataframe to be split
   #' @ratio: Ratio of training data, (validation and test set to equal length)
   #' @return: A list of three dataframes: training, validation and test sets
+  set.seed(13231)
+  all_companies <- df$PERMNO %>% unique()
+  
+  train_indices <- sample(1:length(all_companies), floor(length(all_companies)* train_ratio))
+  train_companies <- all_companies[train_indices]
+  val_test_companies <- all_companies[-train_indices]
+  
+  val_indices <- sample(1:length(val_test_companies), floor(length(val_test_companies)* test_ratio))
+  val_companies <- all_companies[val_indices]
+  
+
+  test_companies <- all_companies[-c(val_indices, train_indices)]
+  train_sample <- df %>% filter(PERMNO %in% train_companies)
+  val_sample <- df %>% filter(PERMNO %in% val_companies)
+  test_sample <- df %>% filter(PERMNO %in% test_companies)
+  return ( 
+    list(train_sample, val_sample, test_sample)
+  )
+}
+
+
+perform_train_test_split <- function(df, train_ratio = 0.8) {
+  #' @Description: Ensures an equal amount of companies in each set
+  #' 
+  #' @df:    The dataframe to be split
+  #' @ratio: Ratio of training data, (validation and test set to equal length)
+  #' @return: A list of three dataframes: training, validation and test sets
   set.seed(123)
   all_companies <- df$PERMNO %>% unique()
   
   train_indices <- sample(1:length(all_companies), floor(length(all_companies)* train_ratio))
   train_companies <- all_companies[train_indices]
-  val_test_companies <- all_companies[-companies_indices]
-  val_indices <- sample(1:length(val_test_companies), floor(length(val_test_companies)* test_ratio))
-  val_companies <- all_companies[val_indices]
-  test_companies <- all_companies[-c(val_indices, train_indices)]
-  train_df <- df %>% filter(PERMNO %in% train_companies)
-  val_df <- df %>% filter(PERMNO %in% val_companies)
-  test_df <- df %>% filter(PERMNO %in% test_companies)
+  test_companies <- all_companies[-train_indices]
+
+  train_sample <- df %>% filter(PERMNO %in% train_companies)
+  test_sample  <- df %>% filter(PERMNO %in% test_companies)
   return ( 
-    list(train_df, val_df, test_df)
+    list(train_sample, test_sample)
   )
 }
 
 
+
 find_company_observations <- function(df, minimum_obserations) {
   #' 
-  #' @description: Finds companies
+  #' @description: Finds companies that have less than a minimum amount of observations
   all_companies <- df$PERMNO %>% unique()
   
   df %<>% group_by(PERMNO) %>% 
@@ -118,17 +143,15 @@ find_company_observations <- function(df, minimum_obserations) {
 
 low_observation_count_companies <- find_company_observations(df_reduced, 50)
 
-df_reduced <- df_reduced %>% anti_join(companies) # Cut companies with fewer than 50 observations (they cannot be reliably predicted)
-
-
-train_validation_test_reduced <- perform_train_validate_split(df_reduced, train_ratio = 0.6, test_ratio = 0.5)
-
-train_df_reduced <- train_validation_test_reduced[[1]]
-validation_df_reduced <- train_validation_test_reduced[[2]]
-test_df_reduced <- train_validation_test_reduced[[3]]
+df_reduced <- df_reduced %>% anti_join(low_observation_count_companies) # Cut companies with fewer than 50 observations (they cannot be reliably predicted)
 
 
 
+# Train and test split
 
+train_test_reduced <- perform_train_test_split(df_reduced, train_ratio = 0.8)
+train_df_reduced <- train_test_reduced[[1]]
+test_df_reduced <- train_test_reduced[[2]]
 
-
+# Check for similar rows
+test_df_reduced %>% inner_join(train_df_reduced, by = "PERMNO") %>% nrow()
