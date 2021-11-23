@@ -6,21 +6,24 @@
 library(tidyverse)
 library(magrittr)
 library(tidymodels)
+library(randomForest)
+library(caret)
+library(doParallel)
 
 
 
 # Set WD -----------------------------------------------------------------------
-setwd("~/OneDrive - Norges Handelshøyskole/MASTER/FIE453/FinalExam/FIE453/Final Paper")
+#setwd("~/OneDrive - Norges Handelshøyskole/MASTER/FIE453/FinalExam/FIE453/Final Paper")
 
 
 
 
 # Load and read data -----------------------------------------------------------
 load("data/merged.Rdata")
-company_names_df <- read.csv(file = "data/names.csv")
-feature_names_df <- read.delim(file = "data/compustat-fields.txt")    
-company_names_df %<>% rename_with(tolower)
-feature_names_df %<>% rename_with(tolower) 
+#company_names_df <- read.csv(file = "data/names.csv")
+feature_names_df <- read.delim(file = "descriptions/compustat-fields.txt")    
+#company_names_df %<>% rename_with(tolower)
+#feature_names_df %<>% rename_with(tolower) 
 merged %<>% rename_with(tolower)
 
 
@@ -32,7 +35,7 @@ permno_top <- (merged %>%
     unique() %>% 
     head(1000))$permno
 
-df <- merged %>% filter(permno %in% permno_top)
+df_reduced <- merged %>% filter(permno %in% permno_top)
 
 
 
@@ -155,7 +158,7 @@ replace_NA_with_mean <- function(df, print_replaced_cols = F){
 
 
 # Testing ----------------------------------------------------------------------
-df %<>% 
+df_reduced %<>% 
     remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
     remove_NA(0.2, print_removed_cols = T) %>% 
     remove_nzv(print_removed_cols = T) %>% 
@@ -163,38 +166,114 @@ df %<>%
     replace_NA_with_mean(print_replaced_cols = T)
 
 
-# Random Forest ----------------------------------------------------------------
-library(randomForest)
-library(caret)
-library(doParallel)
+
+
+
+
+
+
+perform_train_test_split <- function(df, train_ratio = 0.8) {
+    #' @Description: Ensures an equal amount of companies in each set
+    #' 
+    #' @df:    The dataframe to be split
+    #' @ratio: Ratio of training data, (validation and test set to equal length)
+    #' @return: A list of three dataframes: training, validation and test sets
+    set.seed(123)
+    all_companies <- df$permno %>% unique()
+    
+    train_indices <- sample(1:length(all_companies), floor(length(all_companies)* train_ratio))
+    train_companies <- all_companies[train_indices]
+    test_companies <- all_companies[-train_indices]
+    
+    train_sample <- df %>% filter(permno %in% train_companies)
+    test_sample  <- df %>% filter(permno %in% test_companies)
+    return ( 
+        list(train_sample, test_sample)
+    )
+}
+
+
+
+find_company_observations <- function(df, minimum_obserations) {
+    #' 
+    #' @description: Finds companies that have less than a minimum amount of observations
+    all_companies <- df$permno %>% unique()
+    
+    df %<>% group_by(permno) %>% 
+        summarise(count = n()) %>% 
+        ungroup() %>% 
+        filter(count < minimum_obserations) %>% 
+        arrange(desc(count))
+    
+    return(df)
+}
+
+low_observation_count_companies <- find_company_observations(df_reduced, 50)
+
+df_reduced <- df_reduced %>% anti_join(low_observation_count_companies) # Cut companies with fewer than 50 observations (they cannot be reliably predicted)
+
+
+
+# Train and test split
+
+train_test_reduced <- perform_train_test_split(df_reduced, train_ratio = 0.8)
+train_df_reduced <- train_test_reduced[[1]]
+test_df_reduced <- train_test_reduced[[2]]
+
+# Check for similar rows
+test_df_reduced %>% inner_join(train_df_reduced, by = "permno") %>% nrow()
+
+
+
+
 cl <- makePSOCKcluster(5)
 registerDoParallel(cl)
 
 
 
-y <- df$retx
-x <- df %>% select(-retx)
+y <- train_df_reduced$retx
+x <- train_df_reduced %>% select(-retx)
 
-control <- trainControl(method = "cv",
+train_control <- trainControl(method = "cv",
                         number = 5,
                         verboseIter = TRUE)
 
+# Random Forest ----------------------------------------------------------------
 set.seed(1)
 
-mtry <- sqrt(ncol(x))
+mtry <- round(sqrt(ncol(x)))
 
-tunegrid <- expand.grid(.mtry = mtry)
+tunegrid_rf <- expand.grid(.mtry = 2)
 
 
 start_time <- Sys.time()
 rf <- train(x, y,
             method = "rf",
             importance = TRUE,
-            tuneGrid = tunegrid,
-            trControl = control)
+            tuneGrid = tunegrid_rf,
+            trControl = train_control)
 end_time <- Sys.time()
-
-stopCluster(cl)
 
 # Most important features
 varImp(rf)
+
+# KNN ----------------------------------------------------------------
+# Should be far faster than RF, SVM, etc
+
+
+tunegrid_knn <- expand.grid(.mtry = 2)
+
+
+
+
+
+
+stopCluster(cl)
+
+
+
+
+
+
+
+
