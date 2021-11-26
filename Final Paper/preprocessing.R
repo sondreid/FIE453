@@ -43,7 +43,6 @@ merged %<>% select(-excluded_variables)
 
 
 
-
 get_subset_of_companies <-function(df, number_of_companies) {
     #'
     #' @Description: To reduce runtime, we want to reduce the number of companies,
@@ -54,14 +53,12 @@ get_subset_of_companies <-function(df, number_of_companies) {
     #' @return: a dataframe of fewer companies
     set.seed(123)
     companies <- df$permno %>% unique()
-    subset_of_companies <- companies %>% sample(., number_of_companies)
+    subset_of_companies <- companies %>% sample(x = ., size = number_of_companies)
     return(df %>% filter(permno %in% subset_of_companies))
     
 }
 
-# Subset of 100 companies ------------------------------------------------------
 
-df_reduced <- get_subset_of_companies(merged, 100)
 
 
 
@@ -197,16 +194,32 @@ replace_NA_with_mean <- function(df, print_replaced_cols = F){
     return(df)
 }
 
+remove_NA_rows <- function(df) {
+    #'@description Function that removes any rows with one or more NA's
+
+    #'@return      Data frame NA filtered rows
+    return(df %>% filter(across(everything(), ~ !is.na(.x))) )
+    
+}
 
 
 
-# Testing ----------------------------------------------------------------------
+
+# Reduced dataset for variable selection ----------------------------------------------------------------------
+
+# Subset of 100 companies ------------------------------------------------------
+
+df_reduced <- get_subset_of_companies(merged, 100)
+
+
 df_reduced %<>% 
     remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
     remove_NA(0.2, print_removed_cols = T) %>% 
     remove_nzv(print_removed_cols = T) %>% 
-    remove_hcv(0.9, print_removed_cols = T) %>% 
-    replace_NA_with_mean(print_replaced_cols = T)
+    remove_hcv(0.9, print_removed_cols = T)
+
+df_reduced %<>% 
+    remove_NA_rows() # Remove rows with NA
 
 
 
@@ -284,7 +297,7 @@ expanded_summary  <- function(data, lev = NULL, model = NULL){
     out}
 
 train_control <- trainControl(method = "cv",
-                        number = 5,
+                        number = 10,
                         verboseIter = T,
                         savePredictions = T,
                         summaryFunction = defaultSummary )
@@ -304,17 +317,18 @@ mtry <- round(sqrt(ncol(train_df_reduced)))
 tunegrid_rf <- expand.grid(.mtry = 2)
 
 
-start_time <- Sys.time()
 rf <- train(retx~.,
             data = train_df_reduced,
             method = "rf",
             importance = TRUE,
+            preProcess = c("center","scale"),
             tuneGrid = tunegrid_rf,
             trControl = train_control)
-end_time <- Sys.time()
 
-# Most important features
-varImp(rf)
+
+
+
+rf$results$MAE %>% min() # Validation MAE
 
 
 # GBM ----------------------------------------------------------------
@@ -328,10 +342,20 @@ tunegrid_gbm <-  expand.grid(interaction.depth = c(1, 5, 9),
 gbm <- train(retx~.,
             data = train_df_reduced,
             method = "gbm",
-            verbose = T,
-            importance = T,
+            preProcess = c("center","scale"),
             tuneGrid = tunegrid_gbm,
             trControl = train_control)
+
+
+
+gbm$results$MAE %>% min() # Validation MAE
+
+
+
+
+# Most important features according to RF model
+
+varImp(rf)
 
 
 # Most important features according to gradient boosting model
@@ -343,8 +367,6 @@ var_importance_gbm
 most_important_variables <- tibble(features =  var_importance_gbm$importance %>% as.data.frame() %>% row.names(),
                                    score = var_importance_gbm$importance) %>% 
     arrange(desc(score$Overall))
-
-
 
 
 
