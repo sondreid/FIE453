@@ -21,10 +21,10 @@ library(gbm)
 
 # Load and read data -----------------------------------------------------------
 load("data/merged.Rdata")
-#company_names_df <- read.csv(file = "data/names.csv")
+company_names_df <- read.csv(file = "descriptions/names.csv")
 feature_names_df <- read.delim(file = "descriptions/compustat-fields.txt")    
-#company_names_df %<>% rename_with(tolower)
-#feature_names_df %<>% rename_with(tolower) 
+company_names_df %<>% rename_with(tolower)
+feature_names_df %<>% rename_with(tolower) 
 merged %<>% rename_with(tolower) 
 
 
