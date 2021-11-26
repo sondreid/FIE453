@@ -200,43 +200,6 @@ replace_NA_with_mean <- function(df, print_replaced_cols = F){
 
 
 
-#### Functions for model analysis ##############################################
-
-
-
-plot_confusion_matrix <- function(obs, preds) {
-    #' @description: Function that plots confusion matrix 
-    #' @obs: Observations in vector format
-    #' @preds: predictions in vector format
-    conf_data <- tibble(obs = obs, preds =preds )
-    confusion_matrix <- conf_mat(conf_data, truth = "obs", estimate = "preds")
-    autoplot(confusion_matrix, type = "heatmap") +
-        theme(text = element_text(size = 25))    
-}
-
-
-
-
-make_table <- function(obs, preds, model_name) {
-    #' @description: Function that produces a table of performance metrics: Accuracy, preciscion and recall
-    #' @obs: Observations in vector format
-    #' @preds: predictions in vector format
-    #' @return: A dataframe 
-    obs <- as.factor(obs)
-    preds <- as.factor(preds)
-    table_df <- tibble("Accuracy" = confusionMatrix(preds, obs)[[3]][1], 
-                       "Recall" = caret::recall(table(obs, preds)),
-                       "Preciscion" = caret::precision(table(obs, preds)))  %>% 
-        t()  
-    colnames(table_df) <- "Measure"
-    table_df  %<>% 
-        kbl(caption = model_name)  %>% 
-        kable_classic(full_width = F, html_font = "Times New Roman")
-    return (table_df)
-}
-
- #####################
-
 # Testing ----------------------------------------------------------------------
 df_reduced %<>% 
     remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
@@ -307,8 +270,8 @@ test_df_reduced %>% inner_join(train_df_reduced, by = "permno") %>% nrow()
 
 ### Enable paralell processing
 
-num_cores <- detectCores()-1
-cl <- makePSOCKcluster(num_cores)
+num_cores <- detectCores()-3
+cl <- makePSOCKcluster(num_cores) #Use most cores, or specify
 registerDoParallel(cl)
 
 
