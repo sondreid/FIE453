@@ -374,7 +374,7 @@ most_important_variables <- tibble(features =  var_importance_gbm$importance %>%
 
 
 # Stop cluster
-stopCluster(cl)
+#stopCluster(cl)
 
 
 
