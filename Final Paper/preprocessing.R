@@ -328,14 +328,12 @@ tunegrid_gbm <-  expand.grid(interaction.depth = c(1, 5, 9),
 gbm <- train(retx~.,
             data = train_df_reduced,
             method = "gbm",
-            verbose = T,
-            importance = T,
             tuneGrid = tunegrid_gbm,
             trControl = train_control)
 
 
 # Most important features according to gradient boosting model
-var_importance_gbm <- varImp(gbm, scale = F)
+var_importance_gbm <- varImp(gbm, scale = T)
 var_importance_gbm
 
 ### Store most important features

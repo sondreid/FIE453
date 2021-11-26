@@ -26,8 +26,8 @@ df_full <- merged %>% select(retx, permno,  most_important_variables_list) %>%
   remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
   remove_NA(0.2, print_removed_cols = T) %>% 
   remove_nzv(print_removed_cols = T) %>% 
-  remove_hcv(0.9, print_removed_cols = T) %>% 
-  replace_NA_with_mean(print_replaced_cols = T)
+  remove_hcv(0.9, print_removed_cols = T) #%>% 
+  #replace_NA_with_mean(print_replaced_cols = T)
 
 train_test <- perform_train_test_split(df_full, 
                                        train_ratio = 0.8)
