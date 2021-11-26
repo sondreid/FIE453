@@ -11,7 +11,7 @@ library(caret)
 library(doParallel)
 library(MLmetrics)
 library(gbm)
-
+library(PerformanceAnalytics)
 
 # Set WD -----------------------------------------------------------------------
 #setwd("~/OneDrive - Norges Handelshøyskole/MASTER/FIE453/FinalExam/FIE453/Final Paper")
@@ -21,10 +21,10 @@ library(gbm)
 
 # Load and read data -----------------------------------------------------------
 load("data/merged.Rdata")
-#company_names_df <- read.csv(file = "data/names.csv")
+company_names_df <- read.csv(file = "descriptions/names.csv")
 feature_names_df <- read.delim(file = "descriptions/compustat-fields.txt")    
-#company_names_df %<>% rename_with(tolower)
-#feature_names_df %<>% rename_with(tolower) 
+company_names_df %<>% rename_with(tolower)
+feature_names_df %<>% rename_with(tolower) 
 merged %<>% rename_with(tolower) 
 
 
@@ -43,7 +43,6 @@ merged %<>% select(-excluded_variables)
 
 
 
-
 get_subset_of_companies <-function(df, number_of_companies) {
     #'
     #' @Description: To reduce runtime, we want to reduce the number of companies,
@@ -54,14 +53,12 @@ get_subset_of_companies <-function(df, number_of_companies) {
     #' @return: a dataframe of fewer companies
     set.seed(123)
     companies <- df$permno %>% unique()
-    subset_of_companies <- companies %>% sample(., number_of_companies)
+    subset_of_companies <- companies %>% sample(x = ., size = number_of_companies)
     return(df %>% filter(permno %in% subset_of_companies))
     
 }
 
-# Subset of 100 companies ------------------------------------------------------
 
-df_reduced <- get_subset_of_companies(merged, 100)
 
 
 
@@ -197,16 +194,32 @@ replace_NA_with_mean <- function(df, print_replaced_cols = F){
     return(df)
 }
 
+remove_NA_rows <- function(df) {
+    #'@description Function that removes any rows with one or more NA's
+
+    #'@return      Data frame NA filtered rows
+    return(df %>% filter(across(everything(), ~ !is.na(.x))) )
+    
+}
 
 
 
-# Testing ----------------------------------------------------------------------
+
+# Reduced dataset for variable selection ----------------------------------------------------------------------
+
+# Subset of 100 companies ------------------------------------------------------
+
+df_reduced <- get_subset_of_companies(merged, 100)
+
+
 df_reduced %<>% 
     remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
     remove_NA(0.2, print_removed_cols = T) %>% 
     remove_nzv(print_removed_cols = T) %>% 
-    remove_hcv(0.9, print_removed_cols = T) %>% 
-    replace_NA_with_mean(print_replaced_cols = T)
+    remove_hcv(0.9, print_removed_cols = T)
+
+df_reduced %<>% 
+    remove_NA_rows() # Remove rows with NA
 
 
 
@@ -284,7 +297,7 @@ expanded_summary  <- function(data, lev = NULL, model = NULL){
     out}
 
 train_control <- trainControl(method = "cv",
-                        number = 5,
+                        number = 10,
                         verboseIter = T,
                         savePredictions = T,
                         summaryFunction = defaultSummary )
@@ -304,17 +317,18 @@ mtry <- round(sqrt(ncol(train_df_reduced)))
 tunegrid_rf <- expand.grid(.mtry = 2)
 
 
-start_time <- Sys.time()
 rf <- train(retx~.,
             data = train_df_reduced,
             method = "rf",
             importance = TRUE,
+            preProcess = c("center","scale"),
             tuneGrid = tunegrid_rf,
             trControl = train_control)
-end_time <- Sys.time()
 
-# Most important features
-varImp(rf)
+
+
+
+rf$results$MAE %>% min() # Validation MAE
 
 
 # GBM ----------------------------------------------------------------
@@ -328,8 +342,20 @@ tunegrid_gbm <-  expand.grid(interaction.depth = c(1, 5, 9),
 gbm <- train(retx~.,
             data = train_df_reduced,
             method = "gbm",
+            preProcess = c("center","scale"),
             tuneGrid = tunegrid_gbm,
             trControl = train_control)
+
+
+
+gbm$results$MAE %>% min() # Validation MAE
+
+
+
+
+# Most important features according to RF model
+
+varImp(rf)
 
 
 # Most important features according to gradient boosting model
@@ -347,14 +373,51 @@ most_important_variables <- tibble(features =  var_importance_gbm$importance %>%
 
 
 
-
-
 # Stop cluster
 stopCluster(cl)
 
 
+# Descriptive Statistics -------------------------------------------------------
+top_5_most_important_variables <- (most_important_variables %>% 
+                                       head(5) %>% 
+                                       select(features))$features
+
+train_df_reduced %>% 
+    select(retx, top_5_most_important_variables) %>% 
+    chart.Correlation(histogram = TRUE, method = "pearson")
 
 
+histogram_plot <- function(df){
+    for(i in df %>% colnames()){
+        print(qplot(df[,i], 
+                    xlab = i, 
+                    ylab = "frequency", 
+                    main = paste0("Histogram of ", 
+                                  i %>% toupper()), 
+                    geom = "histogram"))
+    }
+}
+
+relationship_plot <- function(df){
+    for(i in df %>% select(-retx) %>%  colnames()){
+        plot(df[,i], 
+             df$retx, 
+             ylab = "retx", 
+             xlab = i, 
+             main = paste0("Relationship plot between RETX and ", 
+                           i %>% toupper))
+    }
+}
+
+# Plotting histogram for each variables in order to observe its distribution
+train_df_reduced %>% 
+    select(retx, top_5_most_important_variables) %>% 
+    histogram_plot()
+
+# Plotting the relationship between RETX and all other features
+train_df_reduced %>% 
+    select(retx, top_5_most_important_variables) %>% 
+    relationship_plot()
 
 
 

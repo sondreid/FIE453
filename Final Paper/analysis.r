@@ -26,8 +26,15 @@ df_full <- merged %>% select(retx, permno,  most_important_variables_list) %>%
   remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
   remove_NA(0.2, print_removed_cols = T) %>% 
   remove_nzv(print_removed_cols = T) %>% 
+<<<<<<< HEAD
   remove_hcv(0.9, print_removed_cols = T) #%>% 
   #replace_NA_with_mean(print_replaced_cols = T)
+=======
+  remove_hcv(0.9, print_removed_cols = T)
+
+df_full %<>% 
+  remove_NA_rows() # Remove NA rows
+>>>>>>> 8564034b3a9ad969b2f5fa7d2feaa963061c3a08
 
 train_test <- perform_train_test_split(df_full, 
                                        train_ratio = 0.8)
@@ -72,6 +79,7 @@ tunegrid_svm <- expand.grid(C = seq(0, 2, length = 20)) # Try variations of marg
 svm                    <- caret::train(retx~.,
                                        data = train_df_reduced,
                                        method = "svmRadial",
+                                       metric = "MAE", # Which metric makes the most sense to use RMSE or MAE. Leaning towards MAE
                                        trControl  = train_control, 
                                        tunegrid = tunegrid_svm,
                                        preProcess = c("center", "scale", "pca"),

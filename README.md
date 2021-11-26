@@ -14,15 +14,13 @@ Deretter
 Tolkbarheten til modellene er mindre viktig, predikerbarhet absolutt viktigst. 
 
 
-SVM: Fleksibel, lite tolkbar
-
-ANN: Fleksibel, lite tolkbar
-
-GAM: Nokså fleksibel, tolkbar
-
-
-
 ## Fremgangsmåte
 
-Hva er returns?
-RETX eller RET. Regne ut egne?
+Ta et mindre utvalg av selskaper
+
+
+
+# Mål 
+
+Skal vi faktisk lage en portefølje med selskaper, eller snarere vise en fremgangsmåte for å kunne utvelge selskaper.
+    
