@@ -24,15 +24,10 @@ df_full <- merged %>% select(retx, permno,  most_important_variables_list) %>%
   remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
   remove_NA(0.2, print_removed_cols = T) %>% 
   remove_nzv(print_removed_cols = T) %>% 
-<<<<<<< HEAD
-  remove_hcv(0.9, print_removed_cols = T) #%>% 
-  #replace_NA_with_mean(print_replaced_cols = T)
-=======
   remove_hcv(0.9, print_removed_cols = T)
 
 df_full %<>% 
   remove_NA_rows() # Remove NA rows
->>>>>>> 8564034b3a9ad969b2f5fa7d2feaa963061c3a08
 
 train_test <- perform_train_test_split(df_full, 
                                        train_ratio = 0.8)
@@ -43,19 +38,16 @@ test_df <- train_test[[2]]
 train_df %>% inner_join(test_df, by = "permno") %>% nrow()
 
 
-## load or run models
 
-load(file = "model_results/models.Rdata")
 
 # KNN ----------------------------------------------------------------
 # Should be far faster than RF, SVM, etc
 
 
-
 tunegrid_knn <- expand.grid(k = 5:25)
 
 
-knn_model <- train(retx~.,
+knn <- train(retx~.,
              data = train_df,
              trControl  = train_control,
              method = "knn",
@@ -65,11 +57,10 @@ knn_model <- train(retx~.,
              allowParalell=TRUE)
 
 
-knn_model
+knn
 
-
-knn_model$results$MAE %>% min() # Validation accuracy
-summary(knn_model)
+knn$results$MAE %>% min() # Validation accuracy
+summary(knn)
 
 
 
@@ -78,7 +69,7 @@ summary(knn_model)
 
 tunegrid_svm <- expand.grid(C = seq(0, 2, length = 20)) # Try variations of margin C
 
-svm_model                    <- caret::train(retx~.,
+svm                    <- caret::train(retx~.,
                                        data = train_df,
                                        method = "svmRadial",
                                        metric = "MAE", # Which metric makes the most sense to use RMSE or MAE. Leaning towards MAE
@@ -89,7 +80,7 @@ svm_model                    <- caret::train(retx~.,
 
 
 
-svm_model$results$MAE %>% min() # Validation accuracy
+svm$results$MAE %>% min() # Validation accuracy
 
 
 
@@ -101,7 +92,7 @@ tunegrid_gbm <-  expand.grid(interaction.depth = c(1, 5, 9),
                              shrinkage = 0.1,
                              n.minobsinnode = 20)
 
-gbm_model <- train(retx~.,
+gbm <- train(retx~.,
              data = train_df,
              method = "gbm",
              preProcess = c("center","scale"),
@@ -111,22 +102,19 @@ gbm_model <- train(retx~.,
 
 
 
-save(knn_model_model, svm_model, gbm_model, file = "model_results/models.Rdata")
-
-
 
 ########## MODEL SELECTION
 # Based on model test performance metrics
 
 
-modelList <- list(svm_model, gbm, knn_model) # List of all models
+modelList <- list(svm, gbm, knn) # List of all models
 
 
 evaluate_models <- function(modelList, test_df) {
   
   #' Outputs a tibble of test and validation metrics
-  
-  
+
+
   model_performance <- tibble()
   for (model in modelList) {
     prediction <- predict(model, newdata = test_df)
@@ -137,17 +125,20 @@ evaluate_models <- function(modelList, test_df) {
                     "Validation MAE" = model$results$MAE %>% min(),
                     "Test RMSE" = test_performance_metrics[[1]],
                     "Test MAE" = test_performance_metrics[[3]]))
-    
+                                       
     
   }
   return (model_performance)
 }
 
 
-evaluate_models(list(knn_model), test_df)
+evaluate_models(list(knn), test_df)
 
 
 
+
+# Stop cluster
+stopCluster(cl)
 
 
 
@@ -169,7 +160,6 @@ test_df <- test_df %>% left_join(company_names_df, by = "permno")
 
 
 select_stocks <- function(test_df, selected_model) {
-  #' @description: Selects stocks based on predictability.
   ## TODO: NOT FINISHED
   companies <- test_df$permno %>% unique()
   company_predictability <- tibble()
@@ -179,17 +169,11 @@ select_stocks <- function(test_df, selected_model) {
     company_predictions <- predict(selected_model, company_data)
     company_performance_metrics <- postResample(pred = prediction, obs = test_df$retx)
     company_predictability %<>% bind_rows(
-      tibble("Company name" = company_data$comnam %>% unique(),
-             "Test RMSE" = company_performance_metrics[[1]],
-             "Test MAE" = company_performance_metrics[[3]])
+      tibble("Company name" = company_data$comnam %>% unique() )
     ) 
     
     
   }
-  return (company_predictability)
+  
   
 }
-
-# Stop cluster
-stopCluster(cl)
-
