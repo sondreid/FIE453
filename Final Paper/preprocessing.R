@@ -29,8 +29,39 @@ merged %<>% rename_with(tolower)
 
 ## Variables that cannot be inclduded with dependent variable RETX
 
-exlcluded_variables <- c("ret", "prc", "vwretd") # vwretd: market excess return
-merged %<>% select(-exlcluded_variables)
+excluded_variables <- c("ret", "prc", 
+                        "vwretd", # vwretd: market excess return
+                        "datadate",
+                        "date",   ## Remove all date related variables
+                        "datafqtr",
+                        "fyearq",
+                        "fyr",
+                        "fqtr",
+                        "datacqtr") 
+merged %<>% select(-excluded_variables)
+
+
+
+
+get_subset_of_companies <-function(df, number_of_companies) {
+    #'
+    #' @Description: To reduce runtime, we want to reduce the number of companies,
+    #' (for testing purposes)
+    #' 
+    #' @df: The dataframe to be split
+    #' @number_of_companies: The number of speakers to be retained
+    #' @return: a dataframe of fewer companies
+    set.seed(123)
+    companies <- df$permno %>% unique()
+    subset_of_companies <- companies %>% sample(., number_of_companies)
+    return(df %>% filter(permno %in% subset_of_companies))
+    
+}
+
+
+# Subset of 100 companies 
+
+df_reduced <- get_subset_of_companies(merged, 100)
 
 
 
@@ -81,6 +112,20 @@ remove_NA <- function(df, ratio, print_removed_cols = F){
     if(print_removed_cols) cat("Columns removed: ", cols, "\n\n")
     
     return(df %>% select(-cols))
+}
+
+remove_zero_and_NA <- function(df, ratio) {
+    #'
+    #'@ratio: ratio of NA's which a column of data cannot exceed
+    
+    out_df <- df 
+    df[is.na(df)] <- 0
+    cols <- df %>% apply(MARGIN = 2, function(x) sum(x==0, na.rm = T)/length(x)) 
+    cols <- cols[cols < ratio] %>% as.data.frame() %>% rownames() 
+    
+    return (
+        out_df %>% select(cols)
+    )
 }
 
 
@@ -249,11 +294,12 @@ find_company_observations <- function(df, minimum_obserations) {
     return(df)
 }
 
-low_observation_count_companies <- find_company_observations(df_reduced, 50)
+low_observation_count_companies <- find_company_observations(df_reduced, 100)
 
 df_reduced <- df_reduced %>% anti_join(low_observation_count_companies) # Cut companies with fewer than 50 observations (they cannot be reliably predicted)
 
 
+df_reduced %<>% head(10000)
 
 # Train and test split
 
@@ -267,7 +313,8 @@ test_df_reduced %>% inner_join(train_df_reduced, by = "permno") %>% nrow()
 
 
 
-cl <- makePSOCKcluster(5)
+num_cores <- detectCores()-1
+cl <- makePSOCKcluster(num_cores)
 registerDoParallel(cl)
 
 
@@ -292,7 +339,7 @@ train_control <- trainControl(method = "cv",
 # Random Forest ----------------------------------------------------------------
 set.seed(1)
 
-mtry <- round(sqrt(ncol(x)))
+mtry <- round(sqrt(ncol(train_df_reduced)))
 
 tunegrid_rf <- expand.grid(.mtry = 2)
 
@@ -352,6 +399,20 @@ svm$results$MAE %>% min() # Validation accuracy
 
 # Stop cluster
 stopCluster(cl)
+
+
+
+
+### Select stocks
+
+
+select_stocks <- function(test_df, validated_model) {
+    
+    
+    
+}
+
+
 
 
 
