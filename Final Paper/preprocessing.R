@@ -10,6 +10,7 @@ library(randomForest)
 library(caret)
 library(doParallel)
 library(MLmetrics)
+library(gbm)
 
 
 # Set WD -----------------------------------------------------------------------
@@ -58,20 +59,10 @@ get_subset_of_companies <-function(df, number_of_companies) {
     
 }
 
-
-# Subset of 100 companies 
+# Subset of 100 companies ------------------------------------------------------
 
 df_reduced <- get_subset_of_companies(merged, 100)
 
-
-
-# Subset of 100 companies ------------------------------------------------------
-permno_top <- (merged %>% 
-    select(permno) %>% 
-    unique() %>% 
-    head(1000))$permno
-
-df_reduced <- merged %>% filter(permno %in% permno_top)
 
 
 
@@ -294,12 +285,12 @@ find_company_observations <- function(df, minimum_obserations) {
     return(df)
 }
 
-low_observation_count_companies <- find_company_observations(df_reduced, 100)
+low_observation_count_companies <- find_company_observations(df_reduced, 50)
 
 df_reduced <- df_reduced %>% anti_join(low_observation_count_companies) # Cut companies with fewer than 50 observations (they cannot be reliably predicted)
 
 
-df_reduced %<>% head(10000)
+
 
 # Train and test split
 
@@ -313,14 +304,13 @@ test_df_reduced %>% inner_join(train_df_reduced, by = "permno") %>% nrow()
 
 
 
+
+### Enable paralell processing
+
 num_cores <- detectCores()-1
 cl <- makePSOCKcluster(num_cores)
 registerDoParallel(cl)
 
-
-
-#y <- train_df_reduced$retx
-#x <- train_df_reduced %>% select(-retx)
 
 
 
@@ -335,6 +325,13 @@ train_control <- trainControl(method = "cv",
                         verboseIter = T,
                         savePredictions = T,
                         summaryFunction = defaultSummary )
+
+
+
+
+
+############################# Variable importance #####################################################
+#########################################################################################################
 
 # Random Forest ----------------------------------------------------------------
 set.seed(1)
@@ -356,62 +353,43 @@ end_time <- Sys.time()
 # Most important features
 varImp(rf)
 
-# KNN ----------------------------------------------------------------
-# Should be far faster than RF, SVM, etc
+
+# GBM ----------------------------------------------------------------
 
 
-tunegrid_knn <- expand.grid(k = 5:25)
+tunegrid_gbm <-  expand.grid(interaction.depth = c(1, 5, 9), 
+                        n.trees = (1:30)*50, 
+                        shrinkage = 0.1,
+                        n.minobsinnode = 20)
+
+gbm <- train(retx~.,
+            data = train_df_reduced,
+            method = "gbm",
+            verbose = T,
+            importance = T,
+            tuneGrid = tunegrid_gbm,
+            trControl = train_control)
 
 
-knn <- train(retx~.,
-             data = train_df_reduced,
-             trControl  = train_control,
-             method = "knn",
-             metric = "MAE", # Which metric makes the most sense to use RMSE or MAE. Leaning towards MAE
-             tunegrid = tunegrid_knn,
-             preProcess = c("center","scale", "pca"),
-             allowParalell=TRUE)
+# Most important features according to gradient boosting model
+var_importance_gbm <- varImp(gbm, scale = F)
+var_importance_gbm
 
+### Store most important features
 
-knn
-
-knn$results$MAE %>% min() # Validation accuracy
-summary(knn)
-
-
-
-# SVM ----------------------------------------------------------------
-
-
-tunegrid_svm <- expand.grid(C = seq(0, 2, length = 20)) # Try variations of margin C
-
-svm                    <- caret::train(retx~.,
-                                  data = train_df_reduced,
-                                  method = "svmRadial",
-                                  trControl  = train_control, 
-                                  tunegrid = tunegrid_svm,
-                                  preProcess = c("center", "scale", "pca"),
-                                  allowParallel=TRUE)
+most_important_variables <- tibble(features =  var_importance_gbm$importance %>% as.data.frame() %>% row.names(),
+                                   score = var_importance_gbm$importance) %>% 
+    arrange(desc(score$Overall))
 
 
 
-svm$results$MAE %>% min() # Validation accuracy
+
+
+
+
 
 # Stop cluster
 stopCluster(cl)
-
-
-
-
-### Select stocks
-
-
-select_stocks <- function(test_df, validated_model) {
-    
-    
-    
-}
-
 
 
 
