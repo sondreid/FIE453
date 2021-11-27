@@ -136,13 +136,13 @@ summary(knn_weighted_model)
 
 # Bayesian ridge regression ----------------------------------------------------
 # Training the Ridge-model
-bayesian_ridge_model <- train(retx~., 
-                              data = train_df %>% head(50000), 
+bayesian_ridge_model <- train(retx ~ ., 
+                              data       = train_df %>% head(50000), 
                               preProcess = c("center", "scale"),
                               trControl  = train_control, 
                               tuneLength = 10,
-                              metric = "MAE",
-                              method  = "bridge")
+                              metric     = "MAE",
+                              method     = "bridge")
 
 
 # Looking at the Ridge model
