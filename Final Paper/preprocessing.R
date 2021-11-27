@@ -30,7 +30,7 @@ merged %<>% rename_with(tolower)
 
 ## Variables that cannot be inclduded with dependent variable RETX
 
-excluded_variables <- c("ret", "prc", 
+excluded_variables <- c("ret", "prc",  # Price should maybe be allowed
                         "vwretd", # vwretd: market excess return
                         "datadate",
                         "date",   ## Remove all date related variables
@@ -46,7 +46,7 @@ merged %<>% select(-excluded_variables)
 get_subset_of_companies <-function(df, number_of_companies) {
     #'
     #' @Description: To reduce runtime, we want to reduce the number of companies,
-    #' (for testing purposes)
+    #' (for variable selection purposes)
     #' 
     #' @df: The dataframe to be split
     #' @number_of_companies: The number of speakers to be retained
@@ -336,8 +336,8 @@ rf$results$MAE %>% min() # Validation MAE
 
 tunegrid_gbm <-  expand.grid(interaction.depth = c(1, 5, 9), 
                         n.trees = (1:30)*50, 
-                        shrinkage = 0.1,
-                        n.minobsinnode = 20)
+                        shrinkage = c(0.1, 0.2),
+                        n.minobsinnode = c(5,10,20))
 
 gbm <- train(retx~.,
             data = train_df_reduced,
@@ -355,7 +355,7 @@ gbm$results$MAE %>% min() # Validation MAE
 
 # Most important features according to RF model
 
-varImp(rf)
+varImp(rf, scale = F)
 
 
 # Most important features according to gradient boosting model
@@ -378,9 +378,8 @@ most_important_variables <- tibble(features =  var_importance_gbm$importance %>%
 
 
 # Descriptive Statistics -------------------------------------------------------
-top_5_most_important_variables <- (most_important_variables %>% 
-                                       head(5) %>% 
-                                       select(features))$features
+
+top_5_most_important_variables <- most_important_variables$features[1:5]
 
 train_df_reduced %>% 
     select(retx, top_5_most_important_variables) %>% 
