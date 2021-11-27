@@ -18,6 +18,8 @@ library(PerformanceAnalytics)
 library(kableExtra)
 library(knitr)
 library(monomvn)
+library(kableExtra)
+library(lubridate)
 
 
 
@@ -30,13 +32,21 @@ library(monomvn)
 
 # Load and read data -----------------------------------------------------------
 load("data/merged.Rdata")
-company_names_df <- read.csv(file = "descriptions/names.csv")
+company_names_df <- read.csv(file = "descriptions/names.csv") 
 feature_names_df <- read.delim(file = "descriptions/compustat-fields.txt")    
-company_names_df %<>% rename_with(tolower)
+company_names_df %<>% rename_with(tolower) 
 feature_names_df %<>% rename_with(tolower) 
 merged %<>% rename_with(tolower) 
 
 
+# Get only current company names
+company_names_df <- company_names_df %>% mutate(date = ymd(date)) %>% 
+    filter(date > "2011-01-01") %>% 
+    dplyr::select(permno, comnam, ticker)
+
+
+
+## Variables that cannot be inclduded with dependent variable RETX
 
 # Irrelevant features ----------------------------------------------------------
 # Variables that cannot be included with dependent variable RETX
@@ -337,11 +347,12 @@ df_reduced <- df_reduced %>%
 
 # Train and test split
 train_test_reduced <- perform_train_test_split(df_reduced, train_ratio = 0.8)
-train_df_reduced <- train_test_reduced[[1]] %>% dplyr::select(-permno, -gvkey)  # Remove company numbers from training
+train_df_reduced <- train_test_reduced[[1]]
+
 test_df_reduced <- train_test_reduced[[2]]
 
 
-
+train_df_reduced %<>% dplyr::select(-permno, -gvkey) # Remove company numbers from training
 
 # Check for similar rows
 test_df_reduced %>% 
@@ -447,7 +458,9 @@ most_important_features <-
     arrange(desc(score$Overall))
 
 
+save(most_important_features, file = "models/features.Rdata")
 
+top_5_most_important_features <- most_important_features$features[1:5] # Select only most important variables for predicting RETX
 # Saving
 save(most_important_features, file = "models/features.Rdata")
 
@@ -461,8 +474,6 @@ stopCluster(cl)
 
 # Descriptive Statistics -------------------------------------------------------
 
-# Top n most important features
-top_5_most_important_features <- most_important_features$features[1:5]
 
 # Plotting a correlation matrix and histogram between variables in the data frame
 train_df_reduced %>% 
