@@ -17,29 +17,25 @@ library(keras)
 
 ######## Train and test split #####################################
 
-most_important_variables_list <- most_important_variables$features[1:5] # Select only most important variables for predicting RETX
 
 
-df_full <- merged %>% select(retx, permno,  most_important_variables_list) %>% 
-  remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
-  remove_NA(0.2, print_removed_cols = T) %>% 
-  remove_nzv(print_removed_cols = T) %>% 
-  remove_hcv(0.9, print_removed_cols = T)
 
-df_full %<>% 
+df_large <- get_subset_of_companies_ratio(merged, 0.6) %>% dplyr::select(retx, permno,  top_5_most_important_features)
+
+df_large %<>% 
   remove_NA_rows() # Remove NA rows
 
-low_observation_count_companies <- find_company_observations(df_full, 78)
+low_observation_count_companies <- find_company_observations(df_large, 60)
 
-df_full %<>% anti_join(low_observation_count_companies) # Cut companies with fewer than 50 observations (they cannot be reliably predicted)
+df_large %<>% anti_join(low_observation_count_companies) # Cut companies with fewer than 50 observations (they cannot be reliably predicted)
 
 
-train_test <- perform_train_test_split(df_full, 
+train_test <- perform_train_test_split(df_large, 
                                        train_ratio = 0.8) # Split into train and test set with seperate sets of companies
 train_df <- train_test[[1]]
 test_df <- train_test[[2]]
 
-test_df <- test_df %>% left_join(company_names_df, by = "permno") # merge with company names
+
 
 # Check for similar rows
 train_df %>% inner_join(test_df, by = "permno") %>% nrow()
@@ -59,20 +55,51 @@ tunegrid_knn <- expand.grid(k = 5:25)
 
 
 knn_model <- train(retx~.,
-             data = train_df,
-             trControl  = train_control,
-             method = "knn",
-             metric = "MAE", # Which metric makes the most sense to use RMSE or MAE. Leaning towards MAE
-             tunegrid = tunegrid_knn,
-             preProcess = c("center","scale", "pca"),
-             allowParalell=TRUE)
-
+                   data = train_df,
+                   trControl  = train_control,
+                   method = "knn",
+                   metric = "MAE", # Which metric makes the most sense to use RMSE or MAE. Leaning towards MAE
+                   tunegrid = tunegrid_knn,
+                   preProcess = c("center","scale"),
+                   allowParalell=TRUE)
 
 knn_model
 
 
 knn_model$results$MAE %>% min() # Validation accuracy
 summary(knn_model)
+
+
+
+# Weighted KNN ----------------------------------------------------------------
+
+
+
+
+tunegrid_knn_weighted <- expand.grid(kmax = c(5, 9, 15), 
+                                     distance = seq(1,20), 
+                                      kernel = c('gaussian',
+                                                 'triangular',
+                                                 'rectangular',
+                                                 'epanechnikov',
+                                                 'optimal'))
+
+knn_weighted_model <- train(retx~.,
+             data = train_df,
+             trControl  = train_control,
+             method = "kknn",
+             metric = "MAE", # Which metric makes the most sense to use RMSE or MAE. Leaning towards MAE
+             tunegrid = tunegrid_knn_weighted,
+             preProcess = c("center","scale"),
+             allowParalell=TRUE)
+
+knn_weighted_model
+
+
+knn_weighted_model$results$MAE %>% min() # Validation accuracy
+summary(knn_weighted_model)
+
+
 
 
 #### Which models are computationally efficient and yield good results?
@@ -86,9 +113,43 @@ bayesian_ridge_model <- train(retx~.,
                               data = train_df %>% head(50000), 
                               preProcess = c("center", "scale"),
                               trControl  = train_control, 
+                              tuneLength = 10,
+                              metric = "MAE",
                               method  = "bridge")
 
 bayesian_ridge_model
+bayesian_ridge_model$results$MAE %>% min() # Validation accuracy
+
+
+
+
+
+
+
+# Generalized additive model ----------------------------------------------------------------
+
+tunegrid_gam <-  expand.grid(method = c("GCV", "REML"),
+                            select = list(T, F))
+
+
+gam_model <- train(retx~., 
+                   data = train_df, 
+                   preProcess = c("center", "scale"),
+                   trControl  = train_control, 
+                   tunegrid = tunegrid_gam,
+                   metric = "MAE",
+                   method  = "gam")
+
+
+
+gam_model
+gam_model$results$MAE %>% min() # Validation accuracy
+
+
+
+
+
+
 
 # SVM ----------------------------------------------------------------
 
@@ -96,7 +157,7 @@ bayesian_ridge_model
 tunegrid_svm <- expand.grid(C = seq(0, 2, length = 20)) # Try variations of margin C
 
 svm_model                    <- caret::train(retx~.,
-                                       data = train_df %>% head(50000),
+                                       data = train_df,
                                        method = "svmRadial",
                                        metric = "MAE", # Which metric makes the most sense to use RMSE or MAE. Leaning towards MAE
                                        trControl  = train_control, 
@@ -124,21 +185,23 @@ gbm_model <- train(retx~.,
              method = "gbm",
              preProcess = c("center","scale"),
              metric = "MAE", # Which metric makes the most sense to use RMSE or MAE. Leaning towards MAE
-             tuneGrid = tunegrid_gbm,
+             #tuneGrid = tunegrid_gbm,
              trControl = train_control)
 
 
 
 
 #save(knn_model, svm_model, gbm_model, file = "model_results/models.Rdata")
-save(knn_model, file = "model_results/models.Rdata")
+save(knn_model, bayesian_ridge_model, file = "model_results/models.Rdata")
+
+
 
 
 ########## MODEL SELECTION
 # Based on model test performance metrics
 
 
-modelList <- list(svm_model, gbm, knn_model) # List of all models
+modelList <- list(knn_model, gam_model) # List of all models
 
 
 evaluate_models <- function(modelList, test_df) {
@@ -148,12 +211,14 @@ evaluate_models <- function(modelList, test_df) {
   
   model_performance <- tibble()
   for (model in modelList) {
-    prediction <- predict(model, newdata = test_df)
-    test_performance_metrics <- postResample(pred = prediction, obs = test_df$retx)
-    validation_accuracy %<>% bind_rows(
+    test_predictions <- predict(model, newdata = test_df)
+    train_predictions <- predict(model, newdata = train_df)
+    test_performance_metrics <- postResample(pred = test_predictions, obs = test_df$retx)
+    train_performance_metrics <- postResample(pred = train_predictions, obs = train_df$retx)
+    model_performance %<>% bind_rows(
       tibble(       "Model name" =  model$method,
-                    "Validation RMSE" = model$results$RMSE %>% min(),
-                    "Validation MAE" = model$results$MAE %>% min(),
+                    "Training RMSE" = train_performance_metrics[[1]],
+                    "Training MAE" = train_performance_metrics[[3]],
                     "Test RMSE" = test_performance_metrics[[1]],
                     "Test MAE" = test_performance_metrics[[3]]))
     
@@ -163,8 +228,12 @@ evaluate_models <- function(modelList, test_df) {
 }
 
 
-evaluate_models(list(knn_model), test_df)
+model_evaluation <- evaluate_models(list(knn_model), test_df)
 
+model_evaluation %>% 
+  kable(caption = "Performance metrics of tested models", digits=3)  %>% 
+  kable_classic(full_width = F, html_font = "Times New Roman")  %>% 
+  save_kable("images/evaluation_metrics_all_models.png",   zoom = 1.5, density = 1000)
 
 
 
@@ -182,6 +251,13 @@ evaluate_models(list(knn_model), test_df)
 
 
 
+get_company_name <- function(permno) {
+  #'
+  #'@description: Returns the name of a company based on its company identification number
+  company_name <- company_names_df %>% 
+    filter(permno == permno) 
+   return( company_name$comnam[0])
+}
 
 
 
@@ -189,6 +265,7 @@ select_stocks <- function(test_df, selected_model) {
   #' @description: Selects stocks based on predictability.
   ## TODO: NOT FINISHED
   companies <- test_df$permno %>% unique()
+  #test_df  %<>% left_join(company_names_df, by = "permno") # merge with company names
   company_predictability <- tibble()
   for (company in companies) {
     company_data <- test_df %>% 
@@ -196,7 +273,7 @@ select_stocks <- function(test_df, selected_model) {
     company_predictions <- predict(selected_model, company_data)
     company_performance_metrics <- postResample(pred = prediction, obs = test_df$retx)
     company_predictability %<>% bind_rows(
-      tibble("Company name" = company_data$comnam %>% unique(),
+      tibble("Company name" = get_company_name(company_data$permno[1]),
              "Test RMSE" = company_performance_metrics[[1]],
              "Test MAE" = company_performance_metrics[[3]])
     ) 
@@ -206,6 +283,9 @@ select_stocks <- function(test_df, selected_model) {
   return (company_predictability)
   
 }
+
+
+selected_stocks <- select_stocks(test_df, knn_model)
 
 # Stop cluster
 stopCluster(cl)

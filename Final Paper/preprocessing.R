@@ -13,6 +13,8 @@ library(MLmetrics)
 library(gbm)
 library(PerformanceAnalytics)
 library(monomvn)
+library(kableExtra)
+library(lubridate)
 
 # Set WD -----------------------------------------------------------------------
 #setwd("~/OneDrive - Norges Handelshøyskole/MASTER/FIE453/FinalExam/FIE453/Final Paper")
@@ -22,11 +24,18 @@ library(monomvn)
 
 # Load and read data -----------------------------------------------------------
 load("data/merged.Rdata")
-company_names_df <- read.csv(file = "descriptions/names.csv")
+company_names_df <- read.csv(file = "descriptions/names.csv") 
 feature_names_df <- read.delim(file = "descriptions/compustat-fields.txt")    
-company_names_df %<>% rename_with(tolower)
+company_names_df %<>% rename_with(tolower) 
 feature_names_df %<>% rename_with(tolower) 
 merged %<>% rename_with(tolower) 
+
+
+# Get only current company names
+company_names_df <- company_names_df %>% mutate(date = ymd(date)) %>% 
+    filter(date > "2011-01-01") %>% 
+    dplyr::select(permno, comnam, ticker)
+
 
 
 ## Variables that cannot be inclduded with dependent variable RETX
@@ -295,14 +304,13 @@ df_reduced <- df_reduced %>% anti_join(low_observation_count_companies) # Cut co
 
 train_test_reduced <- perform_train_test_split(df_reduced, train_ratio = 0.8)
 train_df_reduced <- train_test_reduced[[1]]
-train_df_reduced %<>% dplyr::select(-permno, -gvkey) # Remove company numbers from training
 
 test_df_reduced <- train_test_reduced[[2]]
 
 # Check for similar rows
 test_df_reduced %>% inner_join(train_df_reduced, by = "permno") %>% nrow()
 
-
+train_df_reduced %<>% dplyr::select(-permno, -gvkey) # Remove company numbers from training
 
 
 
@@ -395,10 +403,10 @@ most_important_features <- tibble(features =  var_importance_gbm$importance %>% 
                                    score = var_importance_gbm$importance) %>% 
     arrange(desc(score$Overall))
 
-#
+
 save(most_important_features, file = "models/features.Rdata")
 
-
+top_5_most_important_features <- most_important_features$features[1:5] # Select only most important variables for predicting RETX
 
 
 # Stop cluster
@@ -407,7 +415,7 @@ save(most_important_features, file = "models/features.Rdata")
 
 # Descriptive Statistics -------------------------------------------------------
 
-top_5_most_important_features <- most_important_features$features[1:5]
+
 
 train_df_reduced %>% 
     dplyr::select(retx, top_5_most_important_features) %>% 
