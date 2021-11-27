@@ -15,7 +15,7 @@ library(keras)
 
 
 
-######## Train and test split
+######## Train and test split #####################################
 
 most_important_variables_list <- most_important_variables$features[1:5] # Select only most important variables for predicting RETX
 
@@ -29,16 +29,24 @@ df_full <- merged %>% select(retx, permno,  most_important_variables_list) %>%
 df_full %<>% 
   remove_NA_rows() # Remove NA rows
 
+low_observation_count_companies <- find_company_observations(df_full, 50)
+
+df_full %<>% anti_join(low_observation_count_companies) # Cut companies with fewer than 50 observations (they cannot be reliably predicted)
+
+
 train_test <- perform_train_test_split(df_full, 
-                                       train_ratio = 0.8)
+                                       train_ratio = 0.8) # Split into train and test set with seperate sets of companies
 train_df <- train_test[[1]]
 test_df <- train_test[[2]]
 
+test_df <- test_df %>% left_join(company_names_df, by = "permno") # merge with company names
+
 # Check for similar rows
 train_df %>% inner_join(test_df, by = "permno") %>% nrow()
+train_df %<>% select(-permno) # Remove company numbers from training
 
-
-## load or run models
+####################################
+###### load or run models
 
 load(file = "model_results/models.Rdata")
 
@@ -67,6 +75,10 @@ knn_model$results$MAE %>% min() # Validation accuracy
 summary(knn_model)
 
 
+#### Which models are computationally efficient and yield good results?
+
+
+
 
 # SVM ----------------------------------------------------------------
 
@@ -74,11 +86,12 @@ summary(knn_model)
 tunegrid_svm <- expand.grid(C = seq(0, 2, length = 20)) # Try variations of margin C
 
 svm_model                    <- caret::train(retx~.,
-                                       data = train_df,
+                                       data = train_df %>% head(50000),
                                        method = "svmRadial",
                                        metric = "MAE", # Which metric makes the most sense to use RMSE or MAE. Leaning towards MAE
                                        trControl  = train_control, 
-                                       tunegrid = tunegrid_svm,
+                                       #tunegrid = tunegrid_svm,
+                                       tuneLength = 4,
                                        preProcess = c("center", "scale", "pca"),
                                        allowParallel=TRUE)
 
@@ -106,8 +119,8 @@ gbm_model <- train(retx~.,
 
 
 
-save(knn_model_model, svm_model, gbm_model, file = "model_results/models.Rdata")
-
+#save(knn_model, svm_model, gbm_model, file = "model_results/models.Rdata")
+save(knn_model, file = "model_results/models.Rdata")
 
 
 ########## MODEL SELECTION
@@ -157,9 +170,7 @@ evaluate_models(list(knn_model), test_df)
 
 
 
-# merge with company names
 
-test_df <- test_df %>% left_join(company_names_df, by = "permno")
 
 
 

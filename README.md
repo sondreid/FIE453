@@ -16,11 +16,20 @@ Tolkbarheten til modellene er mindre viktig, predikerbarhet absolutt viktigst.
 
 ## Fremgangsmåte
 
-Ta et mindre utvalg av selskaper
+Ta et mindre utvalg av selskaper og bruk dem til å finne de viktigste variablene utfra betydning for returns.
+
+Et sett med modeller blir trent og evaluert basert på hele settet med utvalgte variabler. 
+
+Fundamentalt problem:
+    Trene enklere modell på større datasett
+    Eller mer kompleks modell på mindre datagrunnlag
 
 
 
 # Mål 
 
 Skal vi faktisk lage en portefølje med selskaper, eller snarere vise en fremgangsmåte for å kunne utvelge selskaper.
+
+
+
     
