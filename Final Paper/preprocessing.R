@@ -11,7 +11,7 @@ library(caret)
 library(doParallel)
 library(MLmetrics)
 library(gbm)
-
+library(PerformanceAnalytics)
 
 # Set WD -----------------------------------------------------------------------
 #setwd("~/OneDrive - Norges Handelshøyskole/MASTER/FIE453/FinalExam/FIE453/Final Paper")
@@ -359,7 +359,7 @@ varImp(rf, scale = F)
 
 
 # Most important features according to gradient boosting model
-var_importance_gbm <- varImp(gbm, scale = F)
+var_importance_gbm <- varImp(gbm, scale = T)
 var_importance_gbm
 
 ### Store most important features
@@ -377,8 +377,47 @@ most_important_variables <- tibble(features =  var_importance_gbm$importance %>%
 #stopCluster(cl)
 
 
+# Descriptive Statistics -------------------------------------------------------
+top_5_most_important_variables <- (most_important_variables %>% 
+                                       head(5) %>% 
+                                       select(features))$features
+
+train_df_reduced %>% 
+    select(retx, top_5_most_important_variables) %>% 
+    chart.Correlation(histogram = TRUE, method = "pearson")
 
 
+histogram_plot <- function(df){
+    for(i in df %>% colnames()){
+        print(qplot(df[,i], 
+                    xlab = i, 
+                    ylab = "frequency", 
+                    main = paste0("Histogram of ", 
+                                  i %>% toupper()), 
+                    geom = "histogram"))
+    }
+}
+
+relationship_plot <- function(df){
+    for(i in df %>% select(-retx) %>%  colnames()){
+        plot(df[,i], 
+             df$retx, 
+             ylab = "retx", 
+             xlab = i, 
+             main = paste0("Relationship plot between RETX and ", 
+                           i %>% toupper))
+    }
+}
+
+# Plotting histogram for each variables in order to observe its distribution
+train_df_reduced %>% 
+    select(retx, top_5_most_important_variables) %>% 
+    histogram_plot()
+
+# Plotting the relationship between RETX and all other features
+train_df_reduced %>% 
+    select(retx, top_5_most_important_variables) %>% 
+    relationship_plot()
 
 
 
