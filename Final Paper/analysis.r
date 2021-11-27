@@ -9,13 +9,6 @@ library(kknn)
 
 
 
-
-
-######### TRYING TO TRAIN AN ENTIRE MODEL #########
-
-
-
-
 ######## Train and test split #####################################
 
 
@@ -149,6 +142,21 @@ gam_model$results$MAE %>% min() # Validation accuracy
 
 
 
+# Neural network with feature extraction ----------------------------------------------------------------
+
+
+tunegrid_nn <-  expand.grid(size = c(5, 20, 70),
+                            decay = c(0.001, 0.1, 0.2))
+
+
+
+nn_model <- train(retx~., 
+                   data = train_df, 
+                   preProcess = c("center", "scale"),
+                   trControl  = train_control, 
+                   tunegrid = tunegrid_nn,
+                   metric = "MAE",
+                   method  = "nnet")
 
 
 
@@ -278,6 +286,15 @@ select_stocks <- function(test_df, selected_model) {
 
 
 selected_stocks <- select_stocks(test_df, knn_model)
+
+
+
+selected_stocks %>% 
+  arrange(desc("Test MAE")) %>% 
+  kable(caption = "10 stocks of highest predictability", digits=3)  %>% 
+  kable_classic(full_width = F, html_font = "Times New Roman")  %>% 
+  save_kable("images/predictable_stocks.png",   zoom = 1.5, density = 1000)
+
 
 # Stop cluster
 stopCluster(cl)
