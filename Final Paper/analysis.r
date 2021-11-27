@@ -36,9 +36,12 @@ train_df %>% inner_join(test_df, by = "permno") %>% nrow()
 train_df %<>% dplyr::select(-permno) # Remove company numbers from training
 
 ####################################
-###### load or run models
+###### load or run models ###########
 
 load(file = "model_results/models.Rdata")
+
+
+
 
 # KNN ----------------------------------------------------------------
 # Should be far faster than RF, SVM, etc
@@ -201,7 +204,7 @@ gbm_model <- train(retx~.,
 
 
 #save(knn_model, svm_model, gbm_model, file = "model_results/models.Rdata")
-save(knn_model, bayesian_ridge_model, file = "model_results/models.Rdata")
+save(knn_model, tunegrid_knn_weighted, gam_model, bayesian_ridge_model, file = "model_results/models.Rdata")
 
 
 
@@ -210,10 +213,10 @@ save(knn_model, bayesian_ridge_model, file = "model_results/models.Rdata")
 # Based on model test performance metrics
 
 
-modelList <- list(knn_model, gam_model) # List of all models
 
 
-evaluate_models <- function(modelList, test_df) {
+
+evaluate_models <- function(modelList, train_df, test_df) {
   
   #' Outputs a tibble of test and validation metrics
   
@@ -236,8 +239,9 @@ evaluate_models <- function(modelList, test_df) {
   return (model_performance)
 }
 
-
-model_evaluation <- evaluate_models(list(knn_model), test_df)
+modelList <- list(knn_model, knn_weighted_model, gam_model, bayesian_ridge_model) # List of all models
+model_evaluation <- evaluate_models(modelList, train_df,  test_df)
+save(model_evaluation, file = "model_results/model_evalution.Rdata")
 
 model_evaluation %>% 
   kable(caption = "Performance metrics of tested models", digits=3)  %>% 
@@ -258,7 +262,7 @@ model_evaluation %>%
 ###################### Select stocks based on predictability ###################
 ################################################################################
 
-
+selected_model <- bayesian_ridge_model
 
 select_stocks <- function(test_df, selected_model) {
   #' @description: Selects stocks based on predictability.
@@ -285,7 +289,7 @@ select_stocks <- function(test_df, selected_model) {
 }
 
 
-selected_stocks <- select_stocks(test_df, knn_model)
+selected_stocks <- select_stocks(test_df, selected_model)
 
 
 

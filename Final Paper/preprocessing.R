@@ -428,7 +428,9 @@ rf$results$MAE %>% min() # Validation MAE
 # Most important features according to RF model
 varImp(rf, scale = F)
 
-
+# Test performance
+rf_predictions <- predict(rf, test_df_reduced$retx)
+postResample(pred = rf_predictions, obs = test_df$retx)
 
 
 # GBM --------------------------------------------------------------------------
@@ -448,6 +450,10 @@ gbm <- train(retx~.,
 
 gbm$results$MAE %>% min() # Validation MAE
 
+
+# Test performance
+gbm_predictions <- predict(gbm, test_df_reduced$retx)
+postResample(pred = gbm_predictions, obs = test_df$retx)
 
 
 
