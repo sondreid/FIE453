@@ -378,9 +378,8 @@ most_important_variables <- tibble(features =  var_importance_gbm$importance %>%
 
 
 # Descriptive Statistics -------------------------------------------------------
-top_5_most_important_variables <- (most_important_variables %>% 
-                                       head(5) %>% 
-                                       select(features))$features
+
+top_5_most_important_variables <- most_important_variables$features[1:5]
 
 train_df_reduced %>% 
     select(retx, top_5_most_important_variables) %>% 
