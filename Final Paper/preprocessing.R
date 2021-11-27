@@ -475,6 +475,8 @@ most_important_features <-
 
 
 top_5_most_important_features <- most_important_features$features[1:5] # Select only most important variables for predicting RETX
+
+
 # Saving
 save(most_important_features, file = "model_results/features.Rdata")
 
