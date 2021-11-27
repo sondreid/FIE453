@@ -12,6 +12,8 @@ library(doParallel)
 library(MLmetrics)
 library(gbm)
 library(PerformanceAnalytics)
+library(kableExtra)
+library(knitr)
 
 # Set WD -----------------------------------------------------------------------
 #setwd("~/OneDrive - Norges Handelshøyskole/MASTER/FIE453/FinalExam/FIE453/Final Paper")
@@ -374,7 +376,7 @@ most_important_variables <- tibble(features =  var_importance_gbm$importance %>%
 
 
 # Stop cluster
-#stopCluster(cl)
+stopCluster(cl)
 
 
 # Descriptive Statistics -------------------------------------------------------
@@ -398,7 +400,7 @@ histogram_plot <- function(df){
 }
 
 relationship_plot <- function(df){
-    for(i in df %>% select(-retx) %>%  colnames()){
+    for(i in df %>% select(-retx) %>% colnames()){
         plot(df[,i], 
              df$retx, 
              ylab = "retx", 
@@ -418,6 +420,31 @@ train_df_reduced %>%
     select(retx, top_5_most_important_variables) %>% 
     relationship_plot()
 
+
+# Summary statistics -----------------------------------------------------------
+print_summary <- function(df,
+                          title = "",
+                          ndigits = 2,
+                          scientific_notation = FALSE, 
+                          statistics = c("nbr.val", 
+                                         "nbr.null", 
+                                         "nbr.na", 
+                                         "min", 
+                                         "mean", 
+                                         "median", 
+                                         "max", 
+                                         "std.dev")){
+    (df %>%
+        stat.desc() %>% 
+        as.data.frame())[statistics,] %>% 
+        rename_all(toupper) %>% 
+        kbl(digits = ndigits, format.args = list(scientific = scientific_notation), caption = title) %>%
+        kable_classic(full_width = F, html_font = "Times New Roman")
+}
+
+train_df_reduced %>% 
+    select(retx, top_5_most_important_variables) %>% 
+    print_summary(title = "Summary Statistics",ndigits = 1)
 
 
 
