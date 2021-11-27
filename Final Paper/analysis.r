@@ -29,7 +29,7 @@ df_full <- merged %>% select(retx, permno,  most_important_variables_list) %>%
 df_full %<>% 
   remove_NA_rows() # Remove NA rows
 
-low_observation_count_companies <- find_company_observations(df_full, 50)
+low_observation_count_companies <- find_company_observations(df_full, 78)
 
 df_full %<>% anti_join(low_observation_count_companies) # Cut companies with fewer than 50 observations (they cannot be reliably predicted)
 
@@ -43,7 +43,7 @@ test_df <- test_df %>% left_join(company_names_df, by = "permno") # merge with c
 
 # Check for similar rows
 train_df %>% inner_join(test_df, by = "permno") %>% nrow()
-train_df %<>% select(-permno) # Remove company numbers from training
+train_df %<>% dplyr::select(-permno) # Remove company numbers from training
 
 ####################################
 ###### load or run models
@@ -79,6 +79,16 @@ summary(knn_model)
 
 
 
+# Bayesian ridge regression ----------------------------------------------------------------
+
+
+bayesian_ridge_model <- train(retx~., 
+                              data = train_df %>% head(50000), 
+                              preProcess = c("center", "scale"),
+                              trControl  = train_control, 
+                              method  = "bridge")
+
+bayesian_ridge_model
 
 # SVM ----------------------------------------------------------------
 
@@ -110,9 +120,10 @@ tunegrid_gbm <-  expand.grid(interaction.depth = c(1, 5, 9),
                              n.minobsinnode = 20)
 
 gbm_model <- train(retx~.,
-             data = train_df,
+             data = train_df %>% head(50000),
              method = "gbm",
              preProcess = c("center","scale"),
+             metric = "MAE", # Which metric makes the most sense to use RMSE or MAE. Leaning towards MAE
              tuneGrid = tunegrid_gbm,
              trControl = train_control)
 
