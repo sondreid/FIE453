@@ -277,7 +277,7 @@ df_reduced %<>%
     remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
     remove_NA(0.2, print_removed_cols = T) %>% 
     remove_nzv(print_removed_cols = T) %>% 
-    remove_hcv(0.95, print_removed_cols = T)
+    remove_hcv(0.9, print_removed_cols = T)
 
 df_reduced %<>% 
     remove_NA_rows() # Remove rows with NA
@@ -295,6 +295,8 @@ df_reduced <- df_reduced %>% anti_join(low_observation_count_companies) # Cut co
 
 train_test_reduced <- perform_train_test_split(df_reduced, train_ratio = 0.8)
 train_df_reduced <- train_test_reduced[[1]]
+train_df_reduced %<>% dplyr::select(-permno, -gvkey) # Remove company numbers from training
+
 test_df_reduced <- train_test_reduced[[2]]
 
 # Check for similar rows
@@ -344,6 +346,7 @@ rf <- train(retx~.,
             data = train_df_reduced,
             method = "rf",
             importance = TRUE,
+            metric = "MAE",
             preProcess = c("center","scale"),
             tuneGrid = tunegrid_rf,
             trControl = train_control)
@@ -365,6 +368,7 @@ tunegrid_gbm <-  expand.grid(interaction.depth = c(1, 5, 9),
 gbm <- train(retx~.,
             data = train_df_reduced,
             method = "gbm",
+            metric = "MAE",
             preProcess = c("center","scale"),
             tuneGrid = tunegrid_gbm,
             trControl = train_control)
@@ -387,11 +391,12 @@ var_importance_gbm
 
 ### Store most important features
 
-most_important_variables <- tibble(features =  var_importance_gbm$importance %>% as.data.frame() %>% row.names(),
+most_important_features <- tibble(features =  var_importance_gbm$importance %>% as.data.frame() %>% row.names(),
                                    score = var_importance_gbm$importance) %>% 
     arrange(desc(score$Overall))
 
-
+#
+save(most_important_features, file = "models/features.Rdata")
 
 
 
@@ -402,10 +407,10 @@ most_important_variables <- tibble(features =  var_importance_gbm$importance %>%
 
 # Descriptive Statistics -------------------------------------------------------
 
-top_5_most_important_variables <- most_important_variables$features[1:5]
+top_5_most_important_features <- most_important_features$features[1:5]
 
 train_df_reduced %>% 
-    dplyr::select(retx, top_5_most_important_variables) %>% 
+    dplyr::select(retx, top_5_most_important_features) %>% 
     chart.Correlation(histogram = TRUE, method = "pearson")
 
 
@@ -433,12 +438,12 @@ relationship_plot <- function(df){
 
 # Plotting histogram for each variables in order to observe its distribution
 train_df_reduced %>% 
-    dplyr::select(retx, top_5_most_important_variables) %>% 
+    dplyr::select(retx, top_5_most_important_features) %>% 
     histogram_plot()
 
 # Plotting the relationship between RETX and all other features
 train_df_reduced %>% 
-    dplyr::select(retx, top_5_most_important_variables) %>% 
+    dplyr::select(retx, top_5_most_important_features) %>% 
     relationship_plot()
 
 

@@ -43,7 +43,7 @@ test_df <- test_df %>% left_join(company_names_df, by = "permno") # merge with c
 
 # Check for similar rows
 train_df %>% inner_join(test_df, by = "permno") %>% nrow()
-train_df %<>% select(-permno) # Remove company numbers from training
+train_df %<>% dplyr::select(-permno) # Remove company numbers from training
 
 ####################################
 ###### load or run models
