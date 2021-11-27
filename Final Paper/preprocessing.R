@@ -34,15 +34,23 @@ library(lubridate)
 load("data/merged.Rdata")
 company_names_df <- read.csv(file = "descriptions/names.csv") 
 feature_names_df <- read.delim(file = "descriptions/compustat-fields.txt")    
-company_names_df %<>% rename_with(tolower) 
+company_names_df %<>% rename_with(tolower) %>% mutate(date = ymd(date))
 feature_names_df %<>% rename_with(tolower) 
 merged %<>% rename_with(tolower) 
 
 
-# Get only current company names
-company_names_df <- company_names_df %>% mutate(date = ymd(date)) %>% 
-    filter(date > "2011-01-01") %>% 
-    dplyr::select(permno, comnam, ticker)
+
+
+
+get_company_name <- function(input_permno) {
+    #'
+    #'@description: Returns the name of a company based on its company identification number
+    company_name <- company_names_df %>% 
+        filter(permno == input_permno) 
+    # If several names are registered. Pick the most recent
+    company_name %<>% arrange(desc(date))
+    return( company_name$comnam[1])
+}
 
 
 
@@ -458,7 +466,7 @@ most_important_features <-
     arrange(desc(score$Overall))
 
 
-save(most_important_features, file = "models/features.Rdata")
+
 
 top_5_most_important_features <- most_important_features$features[1:5] # Select only most important variables for predicting RETX
 # Saving

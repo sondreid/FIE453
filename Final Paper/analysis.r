@@ -4,6 +4,7 @@
 source("preprocessing.R")
 # Libraries
 library(keras)
+library(kknn)
 
 
 
@@ -243,27 +244,17 @@ model_evaluation %>%
 
 
 
-##################### ##
-
-
-### Select stocks based on predictability
 
 
 
-
-get_company_name <- function(permno) {
-  #'
-  #'@description: Returns the name of a company based on its company identification number
-  company_name <- company_names_df %>% 
-    filter(permno == permno) 
-   return( company_name$comnam[0])
-}
+###################### Select stocks based on predictability ###################
+################################################################################
 
 
 
 select_stocks <- function(test_df, selected_model) {
   #' @description: Selects stocks based on predictability.
-  ## TODO: NOT FINISHED
+
   companies <- test_df$permno %>% unique()
   #test_df  %<>% left_join(company_names_df, by = "permno") # merge with company names
   company_predictability <- tibble()
@@ -271,9 +262,10 @@ select_stocks <- function(test_df, selected_model) {
     company_data <- test_df %>% 
       filter(permno == company)
     company_predictions <- predict(selected_model, company_data)
-    company_performance_metrics <- postResample(pred = prediction, obs = test_df$retx)
+    company_performance_metrics <- postResample(pred = company_predictions, obs = test_df$retx)
     company_predictability %<>% bind_rows(
       tibble("Company name" = get_company_name(company_data$permno[1]),
+             "Company identifier" = company_data$permno[1],
              "Test RMSE" = company_performance_metrics[[1]],
              "Test MAE" = company_performance_metrics[[3]])
     ) 
