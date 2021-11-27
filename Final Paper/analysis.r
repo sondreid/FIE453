@@ -4,13 +4,7 @@
 source("preprocessing.R")
 # Libraries
 library(keras)
-
-
-
-
-
-
-######### TRYING TO TRAIN AN ENTIRE MODEL #########
+library(kknn)
 
 
 
@@ -148,6 +142,21 @@ gam_model$results$MAE %>% min() # Validation accuracy
 
 
 
+# Neural network with feature extraction ----------------------------------------------------------------
+
+
+tunegrid_nn <-  expand.grid(size = c(5, 20, 70),
+                            decay = c(0.001, 0.1, 0.2))
+
+
+
+nn_model <- train(retx~., 
+                   data = train_df, 
+                   preProcess = c("center", "scale"),
+                   trControl  = train_control, 
+                   tunegrid = tunegrid_nn,
+                   metric = "MAE",
+                   method  = "nnet")
 
 
 
@@ -243,27 +252,17 @@ model_evaluation %>%
 
 
 
-##################### ##
-
-
-### Select stocks based on predictability
 
 
 
-
-get_company_name <- function(permno) {
-  #'
-  #'@description: Returns the name of a company based on its company identification number
-  company_name <- company_names_df %>% 
-    filter(permno == permno) 
-   return( company_name$comnam[0])
-}
+###################### Select stocks based on predictability ###################
+################################################################################
 
 
 
 select_stocks <- function(test_df, selected_model) {
   #' @description: Selects stocks based on predictability.
-  ## TODO: NOT FINISHED
+
   companies <- test_df$permno %>% unique()
   #test_df  %<>% left_join(company_names_df, by = "permno") # merge with company names
   company_predictability <- tibble()
@@ -271,9 +270,10 @@ select_stocks <- function(test_df, selected_model) {
     company_data <- test_df %>% 
       filter(permno == company)
     company_predictions <- predict(selected_model, company_data)
-    company_performance_metrics <- postResample(pred = prediction, obs = test_df$retx)
+    company_performance_metrics <- postResample(pred = company_predictions, obs = test_df$retx)
     company_predictability %<>% bind_rows(
       tibble("Company name" = get_company_name(company_data$permno[1]),
+             "Company identifier" = company_data$permno[1],
              "Test RMSE" = company_performance_metrics[[1]],
              "Test MAE" = company_performance_metrics[[3]])
     ) 
@@ -286,6 +286,15 @@ select_stocks <- function(test_df, selected_model) {
 
 
 selected_stocks <- select_stocks(test_df, knn_model)
+
+
+
+selected_stocks %>% 
+  arrange(desc("Test MAE")) %>% 
+  kable(caption = "10 stocks of highest predictability", digits=3)  %>% 
+  kable_classic(full_width = F, html_font = "Times New Roman")  %>% 
+  save_kable("images/predictable_stocks.png",   zoom = 1.5, density = 1000)
+
 
 # Stop cluster
 stopCluster(cl)
