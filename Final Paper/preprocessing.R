@@ -12,6 +12,7 @@ library(doParallel)
 library(MLmetrics)
 library(gbm)
 library(PerformanceAnalytics)
+library(monomvn)
 
 # Set WD -----------------------------------------------------------------------
 #setwd("~/OneDrive - Norges Handelshøyskole/MASTER/FIE453/FinalExam/FIE453/Final Paper")
@@ -39,7 +40,7 @@ excluded_variables <- c("ret", "prc",  # Price should maybe be allowed
                         "fyr",
                         "fqtr",
                         "datacqtr") 
-merged %<>% select(-excluded_variables)
+merged %<>% dplyr::select(-excluded_variables)
 
 
 
@@ -57,6 +58,25 @@ get_subset_of_companies <-function(df, number_of_companies) {
     return(df %>% filter(permno %in% subset_of_companies))
     
 }
+
+
+get_subset_of_companies_ratio <-function(df, ratio) {
+    #'
+    #' @Description: To reduce runtime, we want to reduce the number of companies,
+    #' (for variable selection purposes)
+    #' 
+    #' @df: The dataframe to be split
+    #' @number_of_companies: The number of speakers to be retained
+    #' @return: a dataframe of fewer companies
+    set.seed(123)
+    
+    companies <- df$permno %>% unique()
+    number_of_companies <- companies %>% length()
+    subset_of_companies <- companies %>% sample(x = ., size = as.integer(number_of_companies*ratio))
+    return(df %>% filter(permno %in% subset_of_companies))
+    
+}
+
 
 
 
@@ -78,7 +98,7 @@ remove_cols_only_zero_and_NA <- function(df, print_removed_cols = F) {
     
     if(print_removed_cols) cat("Columns removed: ", cols, "\n\n")
     
-    return (df %>% select(-cols))
+    return (df %>% dplyr::select(-cols))
 }
 
 
@@ -99,7 +119,7 @@ remove_NA <- function(df, ratio, print_removed_cols = F){
     
     if(print_removed_cols) cat("Columns removed: ", cols, "\n\n")
     
-    return(df %>% select(-cols))
+    return(df %>% dplyr::select(-cols))
 }
 
 remove_zero_and_NA <- function(df, ratio) {
@@ -109,10 +129,10 @@ remove_zero_and_NA <- function(df, ratio) {
     out_df <- df 
     df[is.na(df)] <- 0
     cols <- df %>% apply(MARGIN = 2, function(x) sum(x==0, na.rm = T)/length(x)) 
-    cols <- cols[cols < ratio] %>% as.data.frame() %>% rownames() 
+    cols <- cols[cols >= ratio] %>% as.data.frame() %>% rownames() 
     
     return (
-        out_df %>% select(cols)
+        out_df %>% dplyr::select(-cols)
     )
 }
 
@@ -137,7 +157,7 @@ remove_nzv <- function(df, print_removed_cols = F){
     
     if(print_removed_cols) cat("Columns removed: ", cols, "\n\n")
     
-    return(df %>% select(-cols))
+    return(df %>% dplyr::select(-cols))
 }
 
 
@@ -166,7 +186,7 @@ remove_hcv <- function(df, threshold = 0.9, print_removed_cols = F){
     
     if(print_removed_cols) cat("Columns removed: ", cols, "\n\n")
     
-    return(df %>% select(-cols))
+    return(df %>% dplyr::select(-cols))
 }
 
 
@@ -203,23 +223,6 @@ remove_NA_rows <- function(df) {
 }
 
 
-
-
-# Reduced dataset for variable selection ----------------------------------------------------------------------
-
-# Subset of 100 companies ------------------------------------------------------
-
-df_reduced <- get_subset_of_companies(merged, 100)
-
-
-df_reduced %<>% 
-    remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
-    remove_NA(0.2, print_removed_cols = T) %>% 
-    remove_nzv(print_removed_cols = T) %>% 
-    remove_hcv(0.9, print_removed_cols = T)
-
-df_reduced %<>% 
-    remove_NA_rows() # Remove rows with NA
 
 
 
@@ -260,6 +263,26 @@ find_company_observations <- function(df, minimum_obserations) {
     
     return(df)
 }
+
+
+# Reduced dataset for variable selection ----------------------------------------------------------------------
+
+# Subset of 100 companies ------------------------------------------------------
+
+df_reduced <- get_subset_of_companies_ratio(merged, 0.1)
+
+
+
+df_reduced %<>% 
+    remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
+    remove_NA(0.2, print_removed_cols = T) %>% 
+    remove_nzv(print_removed_cols = T) %>% 
+    remove_hcv(0.95, print_removed_cols = T)
+
+df_reduced %<>% 
+    remove_NA_rows() # Remove rows with NA
+
+
 
 low_observation_count_companies <- find_company_observations(df_reduced, 50)
 
@@ -382,7 +405,7 @@ most_important_variables <- tibble(features =  var_importance_gbm$importance %>%
 top_5_most_important_variables <- most_important_variables$features[1:5]
 
 train_df_reduced %>% 
-    select(retx, top_5_most_important_variables) %>% 
+    dplyr::select(retx, top_5_most_important_variables) %>% 
     chart.Correlation(histogram = TRUE, method = "pearson")
 
 
@@ -398,7 +421,7 @@ histogram_plot <- function(df){
 }
 
 relationship_plot <- function(df){
-    for(i in df %>% select(-retx) %>%  colnames()){
+    for(i in df %>% dplyr::select(-retx) %>%  colnames()){
         plot(df[,i], 
              df$retx, 
              ylab = "retx", 
@@ -410,12 +433,12 @@ relationship_plot <- function(df){
 
 # Plotting histogram for each variables in order to observe its distribution
 train_df_reduced %>% 
-    select(retx, top_5_most_important_variables) %>% 
+    dplyr::select(retx, top_5_most_important_variables) %>% 
     histogram_plot()
 
 # Plotting the relationship between RETX and all other features
 train_df_reduced %>% 
-    select(retx, top_5_most_important_variables) %>% 
+    dplyr::select(retx, top_5_most_important_variables) %>% 
     relationship_plot()
 
 
