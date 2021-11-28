@@ -21,6 +21,7 @@ library(monomvn)
 library(kableExtra)
 library(lubridate)
 library(kknn)
+#library(RSNNS)
 library(nnet)
 
 
@@ -367,7 +368,7 @@ train_control <- trainControl(method = "cv",
 
 # Reduced data set for variable selection --------------------------------------
 
-# Subset of 100 companies
+
 df_reduced <- get_subset_of_companies_ratio(merged, 0.1)
 
 df_reduced %<>% 

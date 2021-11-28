@@ -60,6 +60,8 @@ load(file = "models/models.Rdata")
 # Should be far faster than RF, SVM, etc
 
 
+set.seed(1) # Set seed for reproducability
+
 # Tune grid of KNN
 tunegrid_knn <- expand.grid(k = 5:25)
 
@@ -167,20 +169,53 @@ gam_model <- train(retx ~ .,
                    method     = "gam")
 
 
-# Looking at the GAM-model
-gam_model
 
 
-# Finding the GAM-model that minimizes MAE
-gam_model$results$MAE %>% min() # Validation accuracy
+# Neural network using specified number of layers  ---------------------------------------
+mlp_grid<-expand.grid(layer1=10,
+                      layer2=10,
+                      layer3=10)
+
+
+mlp_model <- train(retx ~ ., 
+                  data       = train_df, 
+                  preProcess = c("center", "scale"),
+                  trControl  = train_control, 
+                  tuneGrid   = mlp_grid,
+                  metric     = "MAE",
+                  verbose = T,
+                  allowParalell = T,
+                  method     = "mlpML")
 
 
 
 
-# Neural network with feature extraction ---------------------------------------
+# Neural network using specified number of layers with weight decay  ---------------------------------------
+mlp_grid<-expand.grid(layer1=15,
+                      layer2=15,
+                      layer3=15,
+                      decay = 0.001)
+
+
+mlp_weight_decay_model <- caret::train(retx ~ ., 
+                                  data       = train_df, 
+                                  preProcess = c("center", "scale"),
+                                  trControl  = train_control, 
+                                  tuneGrid   = mlp_grid,
+                                  metric     = "MAE",
+                                  verbose = T,
+                                  allowParalell = T,
+                                  method     = "mlpWeightDecayML")
+
+mlp_weight_decay_model_preds <- predict(mlp_weight_decay_model, test_df)
+postResample(mlp_weight_decay_model_preds, test_df$retx)
+
+
+
+# Neural network  ---------------------------------------
 # Tune grid of NN
-tunegrid_nn <-  expand.grid(size  = c(5, 20, 70),
-                            decay = c(0.001, 0.05, 0.1))
+tunegrid_nn <-  expand.grid(size  = c(5, 7, 15),
+                            decay = c(0.001, 0.005, 0.05))
 
 
 # Training the NN-model
@@ -193,6 +228,26 @@ nn_model <- train(retx ~ .,
                    verbose = T,
                    allowParalell = T,
                    method     = "nnet")
+
+
+
+# Neural network with feature extraction ---------------------------------------
+# Tune grid of NN
+tunegrid_pca_nn <-  expand.grid(size  = c(5, 10, 15),
+                            decay = c(0.001, 0.05))
+
+
+# Training the NN-model
+pca_nn_model <- train(retx ~ ., 
+                  data       = train_df, 
+                  preProcess = c("center", "scale"),
+                  trControl  = train_control, 
+                  tuneGrid   = tunegrid_pca_nn,
+                  metric     = "MAE",
+                  verbose = T,
+                  allowParalell = T,
+                  method     = "pcaNNet")
+
 
 
 
@@ -243,8 +298,7 @@ gbm_model <- train(retx ~ .,
 
 
 # Saving the models ------------------------------------------------------------
-#save(knn_model, svm_model, gbm_model, file = "model_results/models.Rdata")
-save(knn_model,nn_model, gam_model, bayesian_ridge_model, file = "models/models.Rdata")
+save(knn_model, pca_nn_model, multi_hidden_layer_model , nn_model, gam_model, bayesian_ridge_model, file = "models/models.Rdata")
 
 
 
@@ -291,20 +345,35 @@ evaluate_models <- function(modelList, train_df, test_df) {
   
 }
 
-modelList <- list(knn_model, nn_model, gam_model, bayesian_ridge_model)   # List of all models
-model_evaluation <- evaluate_models(modelList, train_df,  test_df)  %>%  arrange("Test MAE")
+modelList <- list(knn_model, multi_hidden_layer_model, nn_model, gam_model, bayesian_ridge_model)   # List of all models
+model_evaluation <- evaluate_models(modelList, train_df,  test_df)  %>%  arrange(`Test MAE`)
 save(model_evaluation, file = "model_results/model_evalution.Rdata")
 
 
 # Printing the model evaluation results with kable extra
 model_evaluation %>% 
+  arrange(`Test MAE`) %>% 
   kable(caption = "Performance metrics of tested models", 
-        digits  = 3) %>% 
+        digits  = 4) %>% 
   kable_classic(full_width = F, 
                 html_font  = "Times New Roman")  %>% 
   save_kable("images/evaluation_metrics_all_models.png", 
              zoom = 1.5, 
-             density = 1000)
+             density = 1500)
+
+
+
+# Statically typing names for models
+model_evaluation %>% 
+  arrange(`Test MAE`) %>% 
+  mutate("Model name" = c("Neural Net 10 neurons", "Bayesian Ridge Regression", "Neural Net 5 neurons", "Generalized Additive Models", "K-Nearest Neighbors")) %>% 
+  kable(caption = "Performance metrics of tested models", 
+        digits  = 4) %>% 
+  kable_classic(full_width = F, 
+                html_font  = "Times New Roman")  %>% 
+  save_kable("images/evaluation_metrics_all_models.png", 
+             zoom = 1.5, 
+             density = 1500)
 
 
 
@@ -313,7 +382,7 @@ model_evaluation %>%
 ###################### Select stocks based on predictability ###################
 ################################################################################
 
-selected_model <- bayesian_ridge_model
+
 
 select_stocks <- function(test_df, selected_model) {
   
@@ -350,15 +419,15 @@ select_stocks <- function(test_df, selected_model) {
   
 }
 
-
+selected_model <- multi_hidden_layer_model
 selected_stocks <- select_stocks(test_df, selected_model)
 
 
 # Printing the selected stocks with kable extra
 selected_stocks %>% 
-  arrange(desc("Test MAE")) %>% 
+  arrange(`Test MAE`) %>% 
   kable(caption = "10 stocks of highest predictability", 
-        digits  = 3)  %>% 
+        digits  = 6)  %>% 
   kable_classic(full_width = F, 
                 html_font = "Times New Roman") %>% 
   save_kable("images/predictable_stocks.png", 
