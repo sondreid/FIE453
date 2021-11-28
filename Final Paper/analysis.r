@@ -177,7 +177,7 @@ mlp_grid<-expand.grid(layer1=10,
                       layer3=10)
 
 
-mlp_model <- train(retx ~ ., 
+multi_hidden_layer_model <- train(retx ~ ., 
                   data       = train_df, 
                   preProcess = c("center", "scale"),
                   trControl  = train_control, 
@@ -377,6 +377,21 @@ model_evaluation %>%
 
 
 
+#### Compared to a benchmark model
+
+# A benchmark model which only predicts 0 in returns
+
+benchmark_0_results <- postResample(rep(0, nrow(test_df)), test_df$retx)
+
+tibble("Test MAE" = benchmark_0_results[[3]],
+       "Model" = "0 return prediction") %>% 
+  kable(caption = "Performance of 0-prediction model", 
+        digits  = 4) %>% 
+  kable_classic(full_width = F, 
+                html_font  = "Times New Roman")
+
+
+
 
 ################################################################################
 ###################### Select stocks based on predictability ###################
@@ -419,20 +434,112 @@ select_stocks <- function(test_df, selected_model) {
   
 }
 
-selected_model <- multi_hidden_layer_model
-selected_stocks <- select_stocks(test_df, selected_model)
 
 
-# Printing the selected stocks with kable extra
-selected_stocks %>% 
-  arrange(`Test MAE`) %>% 
+selected_stock_company_info <- function(selected_stocks, test_df,  n) {
+  
+  selected_stocks <- selected_stocks %>% head(n)
+  company_info <- tibble()
+  for (i in 1:nrow(selected_stocks)) {
+
+    mean_marketcap <- test_df %>%
+      filter(permno == selected_stocks[i, ]$`Company identifier`) %>% 
+      summarise(mean_marketcap = mean(marketcap))
+    
+    mean_volume <- test_df %>%
+      filter(permno == selected_stocks[i, ]$`Company identifier`) %>% 
+      summarise(mean_volume = mean(vol))
+    
+    mean_cash <- test_df %>%
+      filter(permno == selected_stocks[i, ]$`Company identifier`) %>% 
+      summarise(mean_cash = mean(chq))
+    
+    
+    mean_operating_income <- test_df %>%
+      filter(permno == selected_stocks[i, ]$`Company identifier`) %>% 
+      summarise(mean_operating_income = mean(oiadpq))
+    
+    company_info %<>% bind_rows(
+      tibble("Company name" = stringr::str_to_title(selected_stocks[i, ]$`Company name`),
+             "Mean market cap" = mean_marketcap$mean_marketcap,
+             "Mean volume" = mean_volume$mean_volume,
+             "Mean cash" = mean_cash$mean_cash,
+             "Mean operating income" = mean_operating_income$mean_operating_income )
+    )
+  }
+  return (company_info)
+  
+}
+
+selected_stock_company_info(selected_stocks, test_df, 10)
+
+
+selected_model <- multi_hidden_layer_model 
+selected_stocks <- select_stocks(test_df, selected_model) %>%  arrange(`Test MAE`)
+
+
+# Printing the most predictable stocks
+selected_stock_company_info(selected_stocks, test_df, 10) %>% 
   kable(caption = "10 stocks of highest predictability", 
-        digits  = 6)  %>% 
+        digits  = 2)  %>% 
   kable_classic(full_width = F, 
                 html_font = "Times New Roman") %>% 
   save_kable("images/predictable_stocks.png", 
              zoom = 1.5, 
-             density = 1000)
+             density = 1700)
+
+
+
+## Summaries for all companies in test sets
+mean_marketcap <- test_df %>%
+  summarise(mean_marketcap = mean(marketcap))
+
+mean_volume <- test_df %>%
+  summarise(mean_volume = mean(vol))
+
+mean_cash <- test_df %>%
+  summarise(mean_cash = mean(chq))
+
+
+mean_operating_income <- test_df %>%
+  summarise(mean_operating_income = mean(oiadpq))
+
+
+all_companies_summary <- 
+  tibble("Mean market cap" = mean_marketcap$mean_marketcap,
+         "Mean volume" = mean_volume$mean_volume,
+         "Mean cash" = mean_cash$mean_cash,
+         "Mean operating income" = mean_operating_income$mean_operating_income )
+
+
+all_companies_summary %>% 
+kable(caption = "Company mean metrics of all companies in test set", 
+      digits  = 2)  %>% 
+  kable_classic(full_width = F, 
+                html_font = "Times New Roman") %>% 
+  save_kable("images/all_company_summary.png", 
+             zoom = 1.5, 
+             density = 1700)
+
+
+
+
+# Mena
+
+most_predictable_companies <- selected_stocks[1:10,]$`Company identifier`
+test_df %>% 
+  filter(permno %in% most_predictable_companies) %>% 
+  summarise(mean_market_cap = mean(marketcap),
+            mean_cash = mean(chq)) %>% 
+  ungroup() %>% 
+  summarise("Mean market cap" = mean(mean_market_cap),
+            "Mean cash" = mean(mean_cash))
+
+
+test_df %>% group_by(permno) %>% 
+  summarise(mean_market_cap = mean(marketcap)) %>% 
+  ungroup() %>% 
+  summarise(mean = mean(mean_market_cap))
 
 
 # Stop cluster
