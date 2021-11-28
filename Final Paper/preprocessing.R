@@ -477,7 +477,7 @@ feature_selection <- function() {
         
             
         } 
-        else { print("> GBM model used for feature selection")  most_important_features <- var_importance_rf }
+        else  most_important_features <- var_importance_rf 
         
         
         most_important_features <- 

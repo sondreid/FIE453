@@ -70,7 +70,7 @@ knn_model <- train(retx ~ .,
                    trControl     = train_control,
                    method        = "knn",
                    metric        = "MAE",                                       # Which metric makes the most sense to use RMSE or MAE. Leaning towards MAE
-                   tunegrid      = tunegrid_knn,
+                   tuneGrid      = tunegrid_knn,
                    preProcess    = c("center", "scale"),
                    allowParalell = TRUE)
 
@@ -106,7 +106,7 @@ knn_weighted_model <- train(retx ~ .,
                             trControl     = train_control,
                             method        = "kknn",
                             metric        = "MAE",                              # Which metric makes the most sense to use RMSE or MAE. Leaning towards MAE
-                            tunegrid      = tunegrid_knn_weighted,
+                            tuneGrid      = tunegrid_knn_weighted,
                             preProcess    = c("center", "scale"),
                             allowParalell = TRUE)
 
@@ -188,7 +188,7 @@ nn_model <- train(retx ~ .,
                    data       = train_df, 
                    preProcess = c("center", "scale"),
                    trControl  = train_control, 
-                   tunegrid   = tunegrid_nn,
+                   tuneGrid   = tunegrid_nn,
                    metric     = "MAE",
                    verbose = T,
                    allowParalell = T,
@@ -313,7 +313,7 @@ model_evaluation %>%
 ###################### Select stocks based on predictability ###################
 ################################################################################
 
-selected_model <- nn_model
+selected_model <- knn_model
 
 select_stocks <- function(test_df, selected_model) {
   
