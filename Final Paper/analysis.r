@@ -388,7 +388,10 @@ tibble("Test MAE" = benchmark_0_results[[3]],
   kable(caption = "Performance of 0-prediction model", 
         digits  = 4) %>% 
   kable_classic(full_width = F, 
-                html_font  = "Times New Roman")
+                html_font  = "Times New Roman") %>% 
+  save_kable("images/0_return_prediction.png", 
+             zoom = 1.5, 
+             density = 1900)
 
 
 
@@ -410,7 +413,6 @@ select_stocks <- function(test_df, selected_model) {
   
   companies <- test_df$permno %>% unique()
   
-  #test_df  %<>% left_join(company_names_df, by = "permno") # merge with company names
   
   company_predictability <- tibble()
   
@@ -420,7 +422,7 @@ select_stocks <- function(test_df, selected_model) {
     
     company_predictions <- predict(selected_model, company_data)
     company_performance_metrics <- postResample(pred = company_predictions, 
-                                                obs = test_df$retx)
+                                                obs = company_data$retx)
     
     company_predictability %<>% bind_rows(
       tibble("Company name"       = get_company_name(company_data$permno[1]),
@@ -434,10 +436,52 @@ select_stocks <- function(test_df, selected_model) {
   
 }
 
+select_stocks_always_0 <- function(test_df) {
+  
+  #' @description:         Function that selects stocks based on predictability
+  #'                       with their performance metrics
+  #' 
+  #' @param test_df        Passing a test data frame 
+  #' @return               Companies with highest predictability
+  
+  companies <- test_df$permno %>% unique()
+  
+  
+  company_predictability <- tibble()
+  
+  for (company in companies) {
+    company_data <- test_df %>% 
+      filter(permno == company)
+    
+
+    company_performance_metrics <- postResample(pred = rep(0, nrow(company_data)), 
+                                                obs = company_data$retx)
+    
+    company_predictability %<>% bind_rows(
+      tibble("Company name"       = get_company_name(company_data$permno[1]),
+             "Company identifier" = company_data$permno[1],
+             "Test RMSE"          = company_performance_metrics[[1]],
+             "Test MAE"           = company_performance_metrics[[3]])
+    ) 
+  }
+  
+  return (company_predictability)
+  
+}
+
+always_0_stocks <- select_stocks_always_0(test_df)
+
+
+
+
 
 
 selected_stock_company_info <- function(selected_stocks, test_df,  n) {
-  
+  #' @description:    Makes a summary of feature means of selcted stocks (companies)
+  #' 
+  #' @sele
+  #' @test_df: orginal test set from which the selcted companies are drawn
+  #' @n: number of included companies
   selected_stocks <- selected_stocks %>% head(n)
   company_info <- tibble()
   for (i in 1:nrow(selected_stocks)) {
@@ -471,11 +515,12 @@ selected_stock_company_info <- function(selected_stocks, test_df,  n) {
   
 }
 
-selected_stock_company_info(selected_stocks, test_df, 10)
-
-
 selected_model <- multi_hidden_layer_model 
+
 selected_stocks <- select_stocks(test_df, selected_model) %>%  arrange(`Test MAE`)
+
+
+
 
 
 # Printing the most predictable stocks
@@ -486,7 +531,7 @@ selected_stock_company_info(selected_stocks, test_df, 10) %>%
                 html_font = "Times New Roman") %>% 
   save_kable("images/predictable_stocks.png", 
              zoom = 1.5, 
-             density = 1700)
+             density = 1900)
 
 
 
@@ -519,27 +564,10 @@ kable(caption = "Company mean metrics of all companies in test set",
                 html_font = "Times New Roman") %>% 
   save_kable("images/all_company_summary.png", 
              zoom = 1.5, 
-             density = 1700)
+             density = 1900)
 
 
 
-
-# Mena
-
-most_predictable_companies <- selected_stocks[1:10,]$`Company identifier`
-test_df %>% 
-  filter(permno %in% most_predictable_companies) %>% 
-  summarise(mean_market_cap = mean(marketcap),
-            mean_cash = mean(chq)) %>% 
-  ungroup() %>% 
-  summarise("Mean market cap" = mean(mean_market_cap),
-            "Mean cash" = mean(mean_cash))
-
-
-test_df %>% group_by(permno) %>% 
-  summarise(mean_market_cap = mean(marketcap)) %>% 
-  ungroup() %>% 
-  summarise(mean = mean(mean_market_cap))
 
 
 # Stop cluster
