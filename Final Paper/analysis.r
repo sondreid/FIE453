@@ -245,7 +245,7 @@ gbm_model <- train(retx ~ .,
 
 # Saving the models ------------------------------------------------------------
 #save(knn_model, svm_model, gbm_model, file = "model_results/models.Rdata")
-save(knn_model, tunegrid_knn_weighted,nn_model, gam_model, bayesian_ridge_model, file = "model_results/models.Rdata")
+save(knn_model, tunegrid_knn_weighted,nn_model, gam_model, bayesian_ridge_model, file = "models/models.Rdata")
 
 
 
