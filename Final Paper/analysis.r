@@ -244,7 +244,7 @@ gbm_model <- train(retx ~ .,
 
 # Saving the models ------------------------------------------------------------
 #save(knn_model, svm_model, gbm_model, file = "model_results/models.Rdata")
-save(knn_model, knn_weighted_model,nn_model, gam_model, bayesian_ridge_model, file = "models/models.Rdata")
+save(knn_model,nn_model, gam_model, bayesian_ridge_model, file = "models/models.Rdata")
 
 
 
@@ -313,7 +313,7 @@ model_evaluation %>%
 ###################### Select stocks based on predictability ###################
 ################################################################################
 
-selected_model <- knn_model
+selected_model <- bayesian_ridge_model
 
 select_stocks <- function(test_df, selected_model) {
   
