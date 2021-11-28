@@ -20,6 +20,8 @@ library(knitr)
 library(monomvn)
 library(kableExtra)
 library(lubridate)
+library(kknn)
+library(nnet)
 
 
 
@@ -329,6 +331,38 @@ find_company_observations <- function(df, minimum_observations) {
 }
 
 
+# Enable parallel processing
+num_cores <- detectCores() - 3
+cl <- makePSOCKcluster(num_cores) # Use most cores, or specify
+registerDoParallel(cl)
+
+
+
+expanded_summary  <- function(data, lev = NULL, model = NULL){
+    
+    #' @description 
+    #' 
+    #' @param data
+    #' @param lev
+    #' @param model
+    
+    a1 <- defaultSummary(data, lev, model)
+    c1 <- prSummary(data, lev, model)
+    out <- c(a1, b1, c1)
+    out
+}
+
+
+
+# Train Control
+train_control <- trainControl(method = "cv",
+                              number = 10,
+                              verboseIter = T,
+                              savePredictions = T,
+                              summaryFunction = defaultSummary)
+
+
+
 
 
 # Reduced data set for variable selection --------------------------------------
@@ -370,35 +404,7 @@ test_df_reduced %>%
 
 
 
-# Enable parallel processing
-num_cores <- detectCores() - 3
-cl <- makePSOCKcluster(num_cores) # Use most cores, or specify
-registerDoParallel(cl)
 
-
-
-expanded_summary  <- function(data, lev = NULL, model = NULL){
-    
-    #' @description 
-    #' 
-    #' @param data
-    #' @param lev
-    #' @param model
-    
-    a1 <- defaultSummary(data, lev, model)
-    c1 <- prSummary(data, lev, model)
-    out <- c(a1, b1, c1)
-    out
-}
-
-
-
-# Train Control
-train_control <- trainControl(method = "cv",
-                        number = 10,
-                        verboseIter = T,
-                        savePredictions = T,
-                        summaryFunction = defaultSummary)
 
 
 
@@ -407,78 +413,95 @@ train_control <- trainControl(method = "cv",
 ############################# Variable importance ##############################
 ################################################################################
 
-# Random Forest ----------------------------------------------------------------
-set.seed(1)
 
-mtry <- round(sqrt(ncol(train_df_reduced)))
+feature_selection <- function() {
+        # Random Forest ----------------------------------------------------------------
+        set.seed(1)
+        
+        mtry <- round(sqrt(ncol(train_df_reduced)))
+        
+        tunegrid_rf <- expand.grid(.mtry = 2)
+        
+        rf <- train(retx~.,
+                    data       = train_df_reduced,
+                    method     = "rf",
+                    importance = TRUE,
+                    metric     = "MAE",
+                    preProcess = c("center","scale"),
+                    tuneGrid   = tunegrid_rf,
+                    trControl  = train_control)
+        
+        rf$results$MAE %>% min() # Validation MAE
+        
+        # Most important features according to RF model
+        var_importance_rf <- varImp(rf, scale = F)
+        var_importance_rf
+        
+        # Test performance
+        rf_predictions <- predict(rf, test_df_reduced)
+        postResample(pred = rf_predictions, obs = test_df_reduced$retx)
+        
+        
+        # GBM --------------------------------------------------------------------------
+        
+        tunegrid_gbm <-  expand.grid(interaction.depth = c(1, 5, 9), 
+                                n.trees = (1:30) * 50, 
+                                shrinkage = c(0.1, 0.2),
+                                n.minobsinnode = c(5,10,20))
+        
+        gbm <- train(retx~.,
+                     data       = train_df_reduced,
+                     method     = "gbm",
+                     metric     = "MAE",
+                     preProcess = c("center","scale"),
+                     tuneGrid   = tunegrid_gbm,
+                     trControl  = train_control)
+        
+        gbm$results$MAE %>% min() # Validation MAE
+        
+        
+        # Test performance
+        gbm_predictions <- predict(gbm, test_df_reduced)
+        postResample(pred = gbm_predictions, obs = test_df_reduced$retx)
+        
+        
+        
+        # Most important features according to gradient boosting model
+        var_importance_gbm <- varImp(gbm, scale = T)
 
-tunegrid_rf <- expand.grid(.mtry = 2)
+        
+        if (postResample(pred = gbm_predictions, obs = test_df_reduced$retx)[[3]] < postResample(pred = rf_predictions, obs = test_df_reduced$retx)[[1]] ) {
+            # Store most important features
+            print("> GBM model used for feature selection")
+            most_important_features <- var_importance_gbm
+        
+            
+        } 
+        else { print("> GBM model used for feature selection")  most_important_features <- var_importance_rf }
+        
+        
+        most_important_features <- 
+            tibble(features = var_importance_gbm$importance %>% 
+                       as.data.frame() %>% row.names(),
+                   score = var_importance_gbm$importance) %>% 
+            arrange(desc(score$Overall))
+        
+        
+        
+        
+        # Saving
+        save(rf_predictions, gbm_predictions, most_important_features, file = "model_results/features.Rdata")
 
-rf <- train(retx~.,
-            data       = train_df_reduced,
-            method     = "rf",
-            importance = TRUE,
-            metric     = "MAE",
-            preProcess = c("center","scale"),
-            tuneGrid   = tunegrid_rf,
-            trControl  = train_control)
-
-rf$results$MAE %>% min() # Validation MAE
-
-# Most important features according to RF model
-varImp(rf, scale = F)
-
-# Test performance
-rf_predictions <- predict(rf, test_df_reduced$retx)
-postResample(pred = rf_predictions, obs = test_df$retx)
-
-
-# GBM --------------------------------------------------------------------------
-
-tunegrid_gbm <-  expand.grid(interaction.depth = c(1, 5, 9), 
-                        n.trees = (1:30) * 50, 
-                        shrinkage = c(0.1, 0.2),
-                        n.minobsinnode = c(5,10,20))
-
-gbm <- train(retx~.,
-             data       = train_df_reduced,
-             method     = "gbm",
-             metric     = "MAE",
-             preProcess = c("center","scale"),
-             tuneGrid   = tunegrid_gbm,
-             trControl  = train_control)
-
-gbm$results$MAE %>% min() # Validation MAE
-
-
-# Test performance
-gbm_predictions <- predict(gbm, test_df_reduced$retx)
-postResample(pred = gbm_predictions, obs = test_df$retx)
-
-
-
-# Most important features according to gradient boosting model
-var_importance_gbm <- varImp(gbm, scale = T)
-var_importance_gbm
-
-
-
-
-# Store most important features
-most_important_features <- 
-    tibble(features = var_importance_gbm$importance %>% 
-               as.data.frame() %>% row.names(),
-           score = var_importance_gbm$importance) %>% 
-    arrange(desc(score$Overall))
-
-
+}
+"Uncomment to run feature selection"
+#feature_selection()
+# Load most important variables
+load(file = "model_results/features.Rdata")
 
 
 top_5_most_important_features <- most_important_features$features[1:5] # Select only most important variables for predicting RETX
 
 
-# Saving
-save(most_important_features, file = "model_results/features.Rdata")
 
 
 # Stop cluster

@@ -10,10 +10,6 @@ source("preprocessing.R")
 load(file = "model_results/features.Rdata")
 
 
-# Libraries
-library(keras)
-library(kknn)
-
 
 
 ################################################################################
@@ -54,7 +50,7 @@ train_df %<>% dplyr::select(-permno) # Remove company numbers from training
 ################################################################################
 
 # In order to save run time one can choose to load the model results
-load(file = "model_results/models.Rdata")
+load(file = "models/models.Rdata")
 
 
 
@@ -137,7 +133,7 @@ summary(knn_weighted_model)
 # Bayesian ridge regression ----------------------------------------------------
 # Training the Ridge-model
 bayesian_ridge_model <- train(retx ~ ., 
-                              data       = train_df %>% head(50000), 
+                              data       = train_df, 
                               preProcess = c("center", "scale"),
                               trControl  = train_control, 
                               tuneLength = 10,
@@ -185,7 +181,7 @@ gam_model$results$MAE %>% min() # Validation accuracy
 # Neural network with feature extraction ---------------------------------------
 # Tune grid of NN
 tunegrid_nn <-  expand.grid(size  = c(5, 20, 70),
-                            decay = c(0.001, 0.1, 0.2))
+                            decay = c(0.001, 0.05, 0.1))
 
 
 # Training the NN-model
@@ -195,6 +191,8 @@ nn_model <- train(retx ~ .,
                    trControl  = train_control, 
                    tunegrid   = tunegrid_nn,
                    metric     = "MAE",
+                   verbose = T,
+                   allowParalell = T,
                    method     = "nnet")
 
 
@@ -247,7 +245,7 @@ gbm_model <- train(retx ~ .,
 
 # Saving the models ------------------------------------------------------------
 #save(knn_model, svm_model, gbm_model, file = "model_results/models.Rdata")
-save(knn_model, tunegrid_knn_weighted, gam_model, bayesian_ridge_model, file = "model_results/models.Rdata")
+save(knn_model, tunegrid_knn_weighted,nn_model, gam_model, bayesian_ridge_model, file = "model_results/models.Rdata")
 
 
 
@@ -256,8 +254,6 @@ save(knn_model, tunegrid_knn_weighted, gam_model, bayesian_ridge_model, file = "
 ################################################################################
 # Based on model test performance metrics
 
-# List of all models
-modelList <- list(knn_model, gam_model) 
 
 
 
@@ -296,13 +292,14 @@ evaluate_models <- function(modelList, train_df, test_df) {
   
 }
 
-modelList <- list(knn_model, knn_weighted_model, gam_model, bayesian_ridge_model) # List of all models
+modelList <- list(knn_model, knn_weighted_model, nn_model, gam_model, bayesian_ridge_model) # List of all models
 model_evaluation <- evaluate_models(modelList, train_df,  test_df)
 save(model_evaluation, file = "model_results/model_evalution.Rdata")
 
 
 # Printing the model evaluation results with kable extra
 model_evaluation %>% 
+  arrange(desc("TEST MAE")) %>% 
   kable(caption = "Performance metrics of tested models", 
         digits  = 3) %>% 
   kable_classic(full_width = F, 
