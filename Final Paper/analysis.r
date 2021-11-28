@@ -93,10 +93,9 @@ summary(knn_model)
 # Tune grid of Weighted KNN with maximum 5, 9 or 15 nearest neighbor
 # using different kernels
 tunegrid_knn_weighted <- expand.grid(kmax = c(5, 9, 15), 
-                                     distance = seq(1,20), 
+                                     distance = seq(5,20), 
                                      kernel = c('gaussian',
                                                 'triangular',
-                                                'rectangular',
                                                 'epanechnikov',
                                                 'optimal')
                                      )
@@ -245,7 +244,7 @@ gbm_model <- train(retx ~ .,
 
 # Saving the models ------------------------------------------------------------
 #save(knn_model, svm_model, gbm_model, file = "model_results/models.Rdata")
-save(knn_model, tunegrid_knn_weighted,nn_model, gam_model, bayesian_ridge_model, file = "models/models.Rdata")
+save(knn_model, knn_weighted_model,nn_model, gam_model, bayesian_ridge_model, file = "models/models.Rdata")
 
 
 
@@ -292,14 +291,13 @@ evaluate_models <- function(modelList, train_df, test_df) {
   
 }
 
-modelList <- list(knn_model, knn_weighted_model, nn_model, gam_model, bayesian_ridge_model) # List of all models
-model_evaluation <- evaluate_models(modelList, train_df,  test_df)
+modelList <- list(knn_model, nn_model, gam_model, bayesian_ridge_model)   # List of all models
+model_evaluation <- evaluate_models(modelList, train_df,  test_df)  %>%  arrange("Test MAE")
 save(model_evaluation, file = "model_results/model_evalution.Rdata")
 
 
 # Printing the model evaluation results with kable extra
 model_evaluation %>% 
-  arrange(desc("TEST MAE")) %>% 
   kable(caption = "Performance metrics of tested models", 
         digits  = 3) %>% 
   kable_classic(full_width = F, 
@@ -315,7 +313,7 @@ model_evaluation %>%
 ###################### Select stocks based on predictability ###################
 ################################################################################
 
-selected_model <- bayesian_ridge_model
+selected_model <- nn_model
 
 select_stocks <- function(test_df, selected_model) {
   
