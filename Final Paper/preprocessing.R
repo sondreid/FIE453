@@ -378,7 +378,7 @@ df_reduced %<>%
     remove_hcv(0.9, print_removed_cols = T) %>% 
     remove_NA_rows() # Remove rows with NA's                             
 
-low_observation_count_companies <- find_company_observations(df_reduced, 50)
+
 
 df_reduced <- df_reduced %>% 
     anti_join(low_observation_count_companies) # Cut companies with fewer than 
@@ -515,10 +515,25 @@ stopCluster(cl)
 # Descriptive Statistics -------------------------------------------------------
 
 
+### GBM variable importance
+most_important_features %>% 
+    head(20) %>% 
+    ggplot(aes(x = reorder(features, - score$Overall), y =  score$Overall)) + 
+    geom_bar(stat = "identity") +
+    theme_bw() +
+    theme(legend.position = "bottom") +
+    labs(x = "Features", y = "Variable importance", title ="Variable importance GBM") +
+    scale_colour_manual(values=c("orange"))
+ggsave(filename = "images/variable_importance_gbm.png", scale = 1, dpi = 1500)
+
+
 # Plotting a correlation matrix and histogram between variables in the data frame
 train_df_reduced %>% 
     dplyr::select(retx, top_5_most_important_features) %>% 
     chart.Correlation(histogram = TRUE, method = "pearson")
+
+
+
 
 
 histogram_plot <- function(df){

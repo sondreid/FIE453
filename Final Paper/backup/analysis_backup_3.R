@@ -89,9 +89,44 @@ summary(knn_model)
 
 
 
+# Weighted KNN -----------------------------------------------------------------
+
+# Tune grid of Weighted KNN with maximum 5, 9 or 15 nearest neighbor
+# using different kernels
+tunegrid_knn_weighted <- expand.grid(kmax = c(5, 9, 15), 
+                                     distance = seq(5,20), 
+                                     kernel = c('gaussian',
+                                                'triangular',
+                                                'epanechnikov',
+                                                'optimal')
+                                     )
+
+# Training the Weighted KNN-model
+knn_weighted_model <- train(retx ~ .,
+                            data          = train_df,
+                            trControl     = train_control,
+                            method        = "kknn",
+                            metric        = "MAE",                              # Which metric makes the most sense to use RMSE or MAE. Leaning towards MAE
+                            tuneGrid      = tunegrid_knn_weighted,
+                            preProcess    = c("center", "scale"),
+                            allowParalell = TRUE)
+
+
+# Looking at the Weighted KNN-model
+knn_weighted_model
+
+
+# Finding the Weighted KNN-model that minimizes MAE
+knn_weighted_model$results$MAE %>% min() # Validation accuracy
+
+
+# Summary of KNN-model
+summary(knn_weighted_model)
 
 
 
+
+#### Which models are computationally efficient and yield good results?
 
 
 
@@ -311,8 +346,7 @@ evaluate_models <- function(modelList, train_df, test_df) {
 }
 
 modelList <- list(knn_model, multi_hidden_layer_model, nn_model, gam_model, bayesian_ridge_model)   # List of all models
-"Uncomment to perform model evaluation"
-#model_evaluation <- evaluate_models(modelList, train_df,  test_df)  %>%  arrange(`Test MAE`)
+model_evaluation <- evaluate_models(modelList, train_df,  test_df)  %>%  arrange(`Test MAE`)
 #save(model_evaluation, file = "model_results/model_evalution.Rdata")
 
 load(file = "model_results/model_evalution.Rdata")
@@ -344,9 +378,9 @@ model_evaluation %>%
 
 
 
-################### Compared to a benchmark model ########################################
+#### Compared to a benchmark model
 
-###### A benchmark model which only predicts 0 in returns
+# A benchmark model which only predicts 0 in returns
 
 benchmark_0_results <- postResample(rep(0, nrow(test_df)), test_df$retx)
 
