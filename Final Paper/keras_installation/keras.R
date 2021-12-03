@@ -32,7 +32,7 @@ install_keras(method = "conda" ,envname = "r-reticulate", tensorflow = "gpu")
 library(ggplot2)
 library(reshape2)
 library(tensorflow)
-library(keras
+library(keras)
 library(reticulate)
 
 tensorflow::use_condaenv("r-reticulate")

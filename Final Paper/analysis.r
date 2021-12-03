@@ -10,6 +10,18 @@ source("preprocessing.R")
 load(file = "model_results/features.Rdata")
 
 
+### Load keras and tensorflow ###
+
+library(tensorflow)
+library(keras)
+library(tfdatasets)
+library(reticulate)
+use_session_with_seed(42, disable_gpu = FALSE, disable_parallel_cpu = FALSE) # Keras seed
+conda_python(envname = "r-reticulate") # Create miniconda enviroment (if not already done)
+tensorflow::use_condaenv("r-reticulate") # Specify enviroment to tensorflow
+
+
+
 
 
 ################################################################################
@@ -185,26 +197,107 @@ postResample(multi_hidden_preds, test_df_all$retx)
 
 
 
+### Keras multilayer
+
+
+spec <- feature_spec(train_df_all, retx ~ .)
+spec <- feature_spec(train_df_all, retx ~ .)%>% 
+  step_numeric_column(
+    all_numeric(),
+    normalizer_fn = scaler_standard()
+  )
+
+spec <- feature_spec(train_df_all, retx ~ . ) %>% 
+  step_numeric_column(all_numeric(), normalizer_fn = scaler_standard()) %>% 
+  fit()
+
+spec_prep <- fit(spec)
+
+model <- keras_model_sequential() %>% 
+  layer_dense_features(dense_features(spec_prep)) %>% 
+  layer_dense(units = 32, activation = "relu") %>% 
+  layer_dense(units = 1, activation = "sigmoid")
+
+
+model %>% compile(
+  loss = loss_binary_crossentropy, 
+  optimizer = "adam", 
+  metrics = "binary_accuracy"
+)
+
+
+
+
+spec <- feature_spec(train_df_all, retx ~ . ) %>% 
+  step_numeric_column(all_numeric(), normalizer_fn = scaler_standard()) %>% 
+  fit()
+
+build_model_3_layers <- function() {
+  input <- layer_input_from_dataset(train_df_all %>% dplyr::select(-retx))
+  
+  output <- input %>% 
+    layer_dense_features(dense_features(spec)) %>% 
+    layer_dense(units = 32, activation = "relu") %>%
+    layer_dense(units = 16, activation = "relu") %>%
+    layer_dense(units = 8,  activation = "relu") 
+  
+  model <- keras_model(input, output)
+  
+  model %>% 
+    compile(
+      loss = "mse", 
+      optimizer = optimizer_sgd(
+        learning_rate = 0.01,
+        momentum = 0.001,
+        decay = c(0.001, 0)),
+      metrics = list("mean_absolute_error")
+    )
+  return (model)
+}
+
+model <- build_model()
+print_dot_callback <- callback_lambda(
+  on_epoch_end = function(epoch, logs) {
+    if (epoch %% 80 == 0) cat("\n")
+    cat(".")
+  }
+)    
+
+
+
+history <- model %>% fit(
+  x = train_df_all %>% dplyr::select(-retx),
+  y = train_df_all$retx,
+  epochs = 40,
+  batch_size = 200,
+  validation_split = 0.2,
+  verbose = 1,
+  callbacks = list(print_dot_callback)
+)
+
+
+c(loss, mae) %<-% (model %>% evaluate(test_df_all %>% dplyr::select(-retx), test_df_all$retx, verbose = 0))
+
+paste0("Mean absolute error on test set: $", sprintf("%.2f", mae * 1000))
+
+# Predict 
+test_predictions <- model %>% predict(test_df_all %>% dplyr::select(-retx))
+test_predictions[ , 1]
+
 
 ### Attempt to run a neural network on the entire dataset using all variables
 
 
 
 
-library(tensorflow)
-library(keras)
-library(reticulate)
-conda_python(envname = "r-reticulate")
-tensorflow::use_condaenv("r-reticulate")
-
 
 keras_nn_grid <-expand.grid(size = c(62,100), # According to the geometric pyramid rule (Masters, 1993),
                       lambda = c(0.001, 0), #Regularization rate
-                      batch_size = 500,
-                      lr = c(0.1, 0.05),
+                      batch_size = 500, # Size of training data exposed to model at a time 
+                      lr = c(0.1, 0.05), # learn rate
                       rho = c(0.001, 0.1), # Weight decay
                       decay= c(0.001, 0), # Learning rate decay
-                      activation = "relu")
+                      activation = "relu") # By far most used. Flips output to either 
 
 stopCluster() # Stop previous cluster
 
@@ -216,7 +309,7 @@ registerDoParallel(cl)
 train_control_nn <- trainControl(verboseIter = F,
                               savePredictions = T,
                               summaryFunction = defaultSummary)
-
+## Single layer model
 keras_nn <- caret::train(retx ~ ., 
                                   data       = train_df_all, 
                                   preProcess = c("center", "scale"),
