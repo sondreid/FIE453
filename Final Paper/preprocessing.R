@@ -59,6 +59,9 @@ get_company_name <- function(input_permno) {
 
 ## Variables that cannot be inclduded with dependent variable RETX
 
+
+## REMEMBER TO INCLUDE DATE WHEN TIME SPLITTING
+
 # Irrelevant features ----------------------------------------------------------
 # Variables that cannot be included with dependent variable RETX
 excluded_variables <- c("ret", 
@@ -332,12 +335,6 @@ find_company_observations <- function(df, minimum_observations) {
 }
 
 
-# Enable parallel processing
-num_cores <- detectCores() - 3
-cl <- makePSOCKcluster(num_cores) # Use most cores, or specify
-registerDoParallel(cl)
-
-
 
 expanded_summary  <- function(data, lev = NULL, model = NULL){
     
@@ -361,6 +358,17 @@ train_control <- trainControl(method = "cv",
                               verboseIter = T,
                               savePredictions = T,
                               summaryFunction = defaultSummary)
+
+
+
+# Enable parallel processing
+num_cores <- detectCores() - 3
+cl <- makePSOCKcluster(num_cores) # Use most cores, or specify
+registerDoParallel(cl)
+
+
+
+
 
 
 

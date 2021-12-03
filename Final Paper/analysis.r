@@ -16,9 +16,12 @@ load(file = "model_results/features.Rdata")
 ########################## Train and Test Split ################################
 ################################################################################
 
+######### Dataframe with all companies using only variance and correlation filter#############
+# Load all 
+load(file = "cached_data/train_test.Rdata")
 
 
-# Dataframe with all companies using only variance and correlation filter
+
 df_all <- merged %>% 
   remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
   remove_NA(0.2, print_removed_cols = T) %>% 
@@ -37,9 +40,14 @@ train_df_all %<>% dplyr::select(-permno) # Remove company numbers from training
 low_observation_count_companies <- find_company_observations(test_df_all, 60)
 test_df_all %<>% anti_join(low_observation_count_companies)                        # Cut companies with fewer than 50 observations (they cannot be reliably predicted)
 
+rm(merged, df_all) # Remove large datasets from memory
+
+save(train_df_all, test_df_all, file = "cached_data/train_test.Rdata")
 
 
-### Using only features identified by GBM model
+
+
+### Using only features identified by GBM model #####
 
 df_large <- 
   get_subset_of_companies_ratio(merged, 0.6) %>% 
@@ -182,30 +190,48 @@ postResample(multi_hidden_preds, test_df_all$retx)
 
 
 
-library(reticulate)
-library(keras)
-library(tensorflow)
-virtualenv_create("myenv")
-use_virtualenv("myenv")
-install_tensorflow(method="virtualenv", envname="myenv")
 
-keras_nn_grid <-expand.grid(size = 62, # According to the geometric pyramid rule (Masters, 1993)
-                      decay= c(0.001, 0),
+library(tensorflow)
+library(keras)
+library(reticulate)
+conda_python(envname = "r-reticulate")
+tensorflow::use_condaenv("r-reticulate")
+
+
+keras_nn_grid <-expand.grid(size = c(62,100), # According to the geometric pyramid rule (Masters, 1993),
+                      lambda = c(0.001, 0), #Regularization rate
+                      batch_size = 500,
+                      lr = c(0.1, 0.05),
+                      rho = c(0.001, 0.1), # Weight decay
+                      decay= c(0.001, 0), # Learning rate decay
                       activation = "relu")
 
+stopCluster() # Stop previous cluster
 
-multi_hidden_layer_model <- caret::train(retx ~ ., 
+cl <- makePSOCKcluster(2) # Use most cores, or specify
+registerDoParallel(cl)
+
+
+
+train_control_nn <- trainControl(verboseIter = F,
+                              savePredictions = T,
+                              summaryFunction = defaultSummary)
+
+keras_nn <- caret::train(retx ~ ., 
                                   data       = train_df_all, 
                                   preProcess = c("center", "scale"),
-                                  trControl  = train_control, 
+                                  trControl  = train_control_nn, 
                                   tuneGrid   = keras_nn_grid,
                                   metric     = "MAE",
-                                  verbose = T,
+                                  verbose = F,
                                   allowParalell = T,
-                                  method     = "mlpKerasDecayCost")
+                                  method     = "mlpKerasDecay")
 
+summary(keras_nn)
 
-multi_hidden_layer_model
+keras_nn_preds <- predict(keras_nn, test_df_all)
+postResample(keras_nn_preds, test_df_all$retx)
+
 
 
 
