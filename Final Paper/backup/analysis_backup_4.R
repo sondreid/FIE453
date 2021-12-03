@@ -176,6 +176,26 @@ multi_hidden_preds <- predict(multi_hidden_layer_model, test_df_all)
 postResample(multi_hidden_preds, test_df_all$retx)
 
 
+# Neural network using specified number of layers with weight decay  ---------------------------------------
+mlp_grid<-expand.grid(layer1=15,
+                      layer2=15,
+                      layer3=15,
+                      decay = 0.001)
+
+
+mlp_weight_decay_model <- caret::train(retx ~ ., 
+                                  data       = train_df, 
+                                  preProcess = c("center", "scale"),
+                                  trControl  = train_control, 
+                                  tuneGrid   = mlp_grid,
+                                  metric     = "MAE",
+                                  verbose = T,
+                                  allowParalell = T,
+                                  method     = "mlpWeightDecayML")
+
+mlp_weight_decay_model_preds <- predict(mlp_weight_decay_model, test_df)
+postResample(mlp_weight_decay_model_preds, test_df$retx)
+
 
 
 ### Attempt to run a neural network on the entire dataset using all variables
@@ -209,7 +229,7 @@ multi_hidden_layer_model
 
 
 
-# Most simple Neural network  ---------------------------------------
+# Neural network  ---------------------------------------
 # Tune grid of NN
 tunegrid_nn <-  expand.grid(size  = c(5, 7, 15),
                             decay = c(0.001, 0.005, 0.05))

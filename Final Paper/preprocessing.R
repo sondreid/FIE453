@@ -380,10 +380,6 @@ df_reduced %<>%
 
 
 
-df_reduced <- df_reduced %>% 
-    anti_join(low_observation_count_companies) # Cut companies with fewer than 
-                                               # 50 observations (they cannot be 
-                                               # reliably predicted)
 
 
 
