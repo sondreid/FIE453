@@ -268,6 +268,43 @@ grid_search_nn_model <- function(model, model_train_df, model_test_df, learning_
 
 }
 
+
+grid_search_nn_model_ada_delta <- function(model, model_train_df, model_test_df,
+                                         epochs, batch_sizes, verbose) {
+  
+  best_MAE <- Inf
+  best_model <- NA
+      for (epoch in epochs) {
+        for (batch_size in batch_sizes) {
+          new_model <- model %>% 
+            compile(
+              loss = "mse", 
+              optimizer = optimizer_adadelta,
+              metrics = list("mean_absolute_error"))
+          
+          
+          history <- new_model %>% 
+            fit(
+              x = model_train_df %>% dplyr::select(-retx),
+              y = model_train_df$retx,
+              epochs = epoch,
+              batch_size = batch_size,
+              validation_split = 0.2,
+              verbose = verbose,
+              callbacks = list(print_dot_callback, early_stop) #Print simplified dots, and stop learning when validation improvements stalls
+            )
+          c(loss, mae) %<-% (new_model %>% evaluate(model_test_df %>% dplyr::select(-retx), model_test_df$retx, verbose = 0))
+          if (mae < best_MAE) {
+            best_model <- history
+            best_MAE <- mae
+          }
+
+    }
+  }
+  return (best_model)
+  
+}
+
 grid_search_nn_model_rmsprop <- function(model, model_train_df, model_test_df, learning_rates, momentums,
                                  epochs, batch_sizes, verbose) {
   
@@ -284,7 +321,7 @@ grid_search_nn_model_rmsprop <- function(model, model_train_df, model_test_df, l
               metrics = list("mean_absolute_error"))
           
           
-          new_model %>% 
+          history <- new_model %>% 
             fit(
               x = model_train_df %>% dplyr::select(-retx),
               y = model_train_df$retx,
@@ -292,11 +329,11 @@ grid_search_nn_model_rmsprop <- function(model, model_train_df, model_test_df, l
               batch_size = batch_size,
               validation_split = 0.2,
               verbose = verbose,
-              callbacks = list(print_dot_callback, early_stop) #Print simplified dosts, and stop learning when validation improvements stalls
+              callbacks = list(print_dot_callback, early_stop) #Print simplified dots, and stop learning when validation improvements stalls
             )
           c(loss, mae) %<-% (new_model %>% evaluate(model_test_df %>% dplyr::select(-retx), model_test_df$retx, verbose = 0))
           if (mae < best_MAE) {
-            best_model <- new_model
+            best_model <- history
             best_MAE <- mae
           }
         }
@@ -338,8 +375,8 @@ make_0_benchmark(test_df_reduced)[[3]] > postResample(predictions_5_nn_model[ , 
 
 
 
-predictions_5_nn_model <- best_model_rms_prop %>% predict(test_df_reduced %>% dplyr::select(-retx))
-predictions_5_nn_model[ , 1]
+predictions_5_nn_model_rms_prop <- best_model_rms_prop %>% predict(test_df_reduced %>% dplyr::select(-retx))
+predictions_5_nn_model_rms_prop[ , 1]
 
 postResample(predictions_5_nn_model[ , 1], test_df_reduced$retx)
 
@@ -459,51 +496,6 @@ postResample(keras_nn_preds, test_df_all$retx)
 
 
 
-# Most simple Neural network  ---------------------------------------
-# Tune grid of NN
-tunegrid_nn <-  expand.grid(size  = c(5, 7, 15),
-                            decay = c(0.001, 0.005, 0.05))
-
-
-# Training the NN-model
-nn_model <- train(retx ~ ., 
-                   data       = train_df, 
-                   preProcess = c("center", "scale"),
-                   trControl  = train_control, 
-                   tuneGrid   = tunegrid_nn,
-                   metric     = "MAE",
-                   verbose = T,
-                   allowParalell = T,
-                   method     = "nnet")
-
-
-
-
-
-# SVM --------------------------------------------------------------------------
-# Tune grid of SVM
-tunegrid_svm <- expand.grid(C = seq(0, 2, length = 20)) # Try variations of margin C
-
-
-# Training the SVM-model
-svm_model <- caret::train(retx ~ .,
-                          data          = train_df,
-                          method        = "svmRadial",
-                          metric        = "MAE",                                # Which metric makes the most sense to use RMSE or MAE. Leaning towards MAE
-                          trControl     = train_control, 
-                          #tunegrid     = tunegrid_svm,
-                          tuneLength    = 4,
-                          preProcess    = c("center", "scale", "pca"),
-                          allowParallel = TRUE)
-
-
-# Looking at the SVM-model
-svm_model
-
-
-# Finding the SVM-model that minimizes MAE
-svm_model$results$MAE %>% min() # Validation accuracy
-
 
 
 
@@ -528,7 +520,7 @@ gbm_preds <- predict(gbm_model, test_df_all)
 postResample(gbm_preds, test_df_all$retx)
 
 # Saving the models ------------------------------------------------------------
-save(knn_model, pca_nn_model, multi_hidden_layer_model , nn_model, gam_model, bayesian_ridge_model, file = "models/models.Rdata")
+save(knn_model, gbm_model, bayesian_ridge_model, file = "models/models.Rdata")
 
 
 
