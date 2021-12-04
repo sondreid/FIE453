@@ -199,37 +199,75 @@ postResample(multi_hidden_preds, test_df_all$retx)
 
 ### Keras multilayer
 
-
-spec <- feature_spec(train_df_all, retx ~ .)
-spec <- feature_spec(train_df_all, retx ~ .)%>% 
-  step_numeric_column(
-    all_numeric(),
-    normalizer_fn = scaler_standard()
-  )
-
-spec <- feature_spec(train_df_all, retx ~ . ) %>% 
-  step_numeric_column(all_numeric(), normalizer_fn = scaler_standard()) %>% 
-  fit()
-
-spec_prep <- fit(spec)
-
-model <- keras_model_sequential() %>% 
-  layer_dense_features(dense_features(spec_prep)) %>% 
-  layer_dense(units = 32, activation = "relu") %>% 
-  layer_dense(units = 1, activation = "sigmoid")
-
-
-model %>% compile(
-  loss = loss_binary_crossentropy, 
-  optimizer = "adam", 
-  metrics = "binary_accuracy"
-)
-
-## Three layer model
-
 spec <- feature_spec(train_df_all, retx ~ . ) %>% 
   step_numeric_column(all_numeric(), normalizer_fn = scaler_standard()) %>% # Scale numeric features
   fit()
+
+
+print_dot_callback <- callback_lambda(
+  on_epoch_end = function(epoch, logs) {
+    if (epoch %% 80 == 0) cat("\n")
+    cat(".")
+  }
+) 
+
+## Five layer model
+build_nn_model_5_layers <- function() {
+  input <- layer_input_from_dataset(train_df_all %>% dplyr::select(-retx))
+  
+  output <- input %>% 
+    layer_dense_features(dense_features(spec)) %>% 
+    layer_dense(units = 64, activation = "relu") %>%
+    layer_dense(units = 32, activation = "relu") %>%
+    layer_dense(units = 16, activation = "relu") %>%
+    layer_dense(units = 18, activation = "relu") %>%
+    layer_dense(units = 4,  activation = "relu") 
+  
+  model <- keras_model(input, output)
+  
+  model %>% 
+    compile(
+      loss = "mse", 
+      optimizer = optimizer_sgd(
+        learning_rate =0.001,
+        momentum = 0.001,
+        decay = 0.001),
+      metrics = list("mean_absolute_error")
+    )
+  return (model)
+}
+
+nn_model_5_layers <- build_nn_model_5_layers()
+
+
+nn_model_5_layers %>% fit(
+  x = train_df_all %>% dplyr::select(-retx),
+  y = train_df_all$retx,
+  epochs = 50,
+  batch_size = 300,
+  validation_split = 0.2,
+  verbose = 1,
+  callbacks = list(print_dot_callback)
+)
+
+
+nn_model_5_layers  %>% save_model_tf(file = "models/3_layer_nn_model")
+
+c(loss, mae) %<-% (nn_model_5_layers %>% evaluate(test_df_all %>% dplyr::select(-retx), test_df_all$retx, verbose = 0))
+
+paste0("> Mean absolute error on test set Three layer model: ", sprintf("%.4f", mae))
+
+# Predict 
+predictions_5_nn_model <- nn_model_5_layers %>% predict(test_df_all %>% dplyr::select(-retx))
+predictions_5_nn_model[ , 1]
+
+postResample(predictions_5_nn_model[ , 1], test_df_all$retx)
+
+
+
+## Three layer model
+
+
 
 build_nn_model_3_layers <- function() {
   input <- layer_input_from_dataset(train_df_all %>% dplyr::select(-retx))
@@ -255,12 +293,7 @@ build_nn_model_3_layers <- function() {
 }
 
 nn_model_3_layers <- build_nn_model_3_layers()
-print_dot_callback <- callback_lambda(
-  on_epoch_end = function(epoch, logs) {
-    if (epoch %% 80 == 0) cat("\n")
-    cat(".")
-  }
-)    
+   
 
 
 
@@ -277,12 +310,12 @@ history_model_3_layers <- model %>% fit(
 nn_model_3_layers  %>% save_model_tf(file = "models/3_layer_nn_model")
 history_model_3_layers  %>% save_model_hdf5(file = "models/3_layer_nn_model")
 
-c(loss, mae) %<-% (model %>% evaluate(test_df_all %>% dplyr::select(-retx), test_df_all$retx, verbose = 0))
+c(loss, mae) %<-% (nn_model_3_layers %>% evaluate(test_df_all %>% dplyr::select(-retx), test_df_all$retx, verbose = 0))
 
 paste0("> Mean absolute error on test set Three layer model: ", sprintf("%.4f", mae))
 
 # Predict 
-test_predictions <- model %>% predict(test_df_all %>% dplyr::select(-retx))
+test_predictions <- nn_model_3_layers %>% predict(test_df_all %>% dplyr::select(-retx))
 test_predictions[ , 1]
 
 postResample(test_predictions[ , 1], test_df_all$retx)
@@ -348,24 +381,6 @@ nn_model <- train(retx ~ .,
                    allowParalell = T,
                    method     = "nnet")
 
-
-
-# Neural network with feature extraction ---------------------------------------
-# Tune grid of NN
-tunegrid_pca_nn <-  expand.grid(size  = c(5, 10, 15),
-                            decay = c(0.001, 0.05))
-
-
-# Training the NN-model
-pca_nn_model <- train(retx ~ ., 
-                  data       = train_df, 
-                  preProcess = c("center", "scale"),
-                  trControl  = train_control, 
-                  tuneGrid   = tunegrid_pca_nn,
-                  metric     = "MAE",
-                  verbose = T,
-                  allowParalell = T,
-                  method     = "pcaNNet")
 
 
 
