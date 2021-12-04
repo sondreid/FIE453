@@ -16,7 +16,7 @@ library(tensorflow)
 library(keras)
 library(tfdatasets)
 library(reticulate)
-set_random_seed (42, disable_gpu = FALSE) # Set seed for reproducability, both tensorflow and R native seed
+set_random_seed (42, disable_gpu = FALSE) # Keras seed
 conda_python(envname = "r-reticulate") # Create miniconda enviroment (if not already done)
 tensorflow::use_condaenv("r-reticulate") # Specify enviroment to tensorflow
 
@@ -57,17 +57,13 @@ make_0_benchmark <- function(selected_test_df) {
   
 }
 
-# Train Control 
 
-parts <- createDataPartition(train_df$retx, times = 1, p = 0.2) # 20 % of training data is used for validation (i.e, hyperparameter selection)
-
-train_control <- trainControl(method = "cv", #Method does not matter as parts dictate 20 % validation of training set
-                              index = parts, 
+# Train Control
+train_control <- trainControl(method = "cv",
                               number = 10,
                               verboseIter = T,
                               savePredictions = T,
                               summaryFunction = defaultSummary)
-
 
 
 
@@ -84,6 +80,7 @@ registerDoParallel(cl)
 # Should be far faster than RF, SVM, etc
 
 
+set.seed(1) # Set seed for reproducability
 
 # Tune grid of KNN
 tunegrid_knn <- expand.grid(k = 5:25)
@@ -91,11 +88,11 @@ tunegrid_knn <- expand.grid(k = 5:25)
 
 # Training the KNN model and evaluating with MAE (Mean Average Error)
 knn_model <- train(retx ~ .,
-                   data          = train_df_reduced,
+                   data          = train_df,
                    trControl     = train_control,
                    method        = "knn",
                    metric        = "MAE",                                       # Which metric makes the most sense to use RMSE or MAE. Leaning towards MAE
-                   tuneLength      = 10,
+                   tuneGrid      = tunegrid_knn,
                    preProcess    = c("center", "scale"),
                    allowParalell = TRUE)
 
@@ -197,14 +194,11 @@ spec_reduced <- feature_spec(train_df_reduced, retx ~ . ) %>%
 
 
 print_dot_callback <- callback_lambda(
-  #' Simplified callback, showing dots instead of full loss/validation error plots
   on_epoch_end = function(epoch, logs) {
     if (epoch %% 80 == 0) cat("\n")
     cat(".")
   }
 ) 
-
-early_stop <- callback_early_stopping(monitor = "val_loss", patience = 20)
 
 
 
@@ -253,7 +247,7 @@ grid_search_nn_model <- function(model, model_train_df, model_test_df, learning_
                   batch_size = batch_size,
                   validation_split = 0.2,
                   verbose = verbose,
-                  callbacks = list(print_dot_callback, early_stop) #Print simplified dosts, and stop learning when validation improvements stalls
+                  callbacks = list(print_dot_callback)
               )
           c(loss, mae) %<-% (new_model %>% evaluate(model_test_df %>% dplyr::select(-retx), model_test_df$retx, verbose = 0))
           if (mae < best_MAE) {
@@ -268,56 +262,8 @@ grid_search_nn_model <- function(model, model_train_df, model_test_df, learning_
 
 }
 
-grid_search_nn_model_rmsprop <- function(model, model_train_df, model_test_df, learning_rates, momentums,
-                                 epochs, batch_sizes, verbose) {
-  
-  best_MAE <- Inf
-  best_model <- NA
-  for (lr in learning_rates) {
-    for (momentum in momentums) {
-      for (epoch in epochs) {
-        for (batch_size in batch_sizes) {
-          new_model <- model %>% 
-            compile(
-              loss = "mse", 
-              optimizer = optimizer_rmsprop(learning_rate = lr),
-              metrics = list("mean_absolute_error"))
-          
-          
-          new_model %>% 
-            fit(
-              x = model_train_df %>% dplyr::select(-retx),
-              y = model_train_df$retx,
-              epochs = epoch,
-              batch_size = batch_size,
-              validation_split = 0.2,
-              verbose = verbose,
-              callbacks = list(print_dot_callback, early_stop) #Print simplified dosts, and stop learning when validation improvements stalls
-            )
-          c(loss, mae) %<-% (new_model %>% evaluate(model_test_df %>% dplyr::select(-retx), model_test_df$retx, verbose = 0))
-          if (mae < best_MAE) {
-            best_model <- new_model
-            best_MAE <- mae
-          }
-        }
-      }
-    }
-  }
-  return (best_model)
-  
-}
-
-best_model_rms_prop  <- grid_search_nn_model_rmsprop(nn_model_5_layers_reduced, train_df_reduced, test_df_reduced, 
-                                             learning_rates = list(0.001, 0.01),
-                                             momentums = list(0),
-                                             batch_sizes = list(50, 80, 400, 1000, 10000),
-                                             epochs = list(20, 50, 70, 300),
-                                             verbose = 0
-                                             
-)
-
 best_model <- grid_search_nn_model(nn_model_5_layers_reduced, train_df_reduced, test_df_reduced, 
-                                   learning_rates = list(0.01, 0.0001),
+                                   learning_rates = list(0.001, 0.000005),
                                    momentums = list(0, 0.001),
                                    batch_sizes = list(100, 500),
                                    epochs = list(30, 100),
@@ -332,18 +278,46 @@ predictions_5_nn_model[ , 1]
 postResample(predictions_5_nn_model[ , 1], test_df_reduced$retx)
 
 
-# Better than 0 benchmark?
-make_0_benchmark(test_df_reduced) 
-make_0_benchmark(test_df_reduced)[[3]] > postResample(predictions_5_nn_model[ , 1], test_df_reduced$retx)[[3]]
 
 
+## Five layer model
+build_nn_model_5_layers <- function() {
+  input <- layer_input_from_dataset(train_df_all %>% dplyr::select(-retx))
+  
+  output <- input %>% 
+    layer_dense_features(dense_features(spec)) %>% 
+    layer_dense(units = 64, activation = "relu") %>%
+    layer_dense(units = 32, activation = "relu") %>%
+    layer_dense(units = 16, activation = "relu") %>%
+    layer_dense(units = 18, activation = "relu") %>%
+    layer_dense(units = 4,  activation = "relu") 
+  
+  model <- keras_model(input, output)
+  
+  model %>% 
+    compile(
+      loss = "mse", 
+      optimizer = optimizer_sgd(
+        learning_rate =0.0001,
+        momentum = 0.001,
+        decay = 0.01),
+      metrics = list("mean_absolute_error")
+    )
+  return (model)
+}
 
-predictions_5_nn_model <- best_model_rms_prop %>% predict(test_df_reduced %>% dplyr::select(-retx))
-predictions_5_nn_model[ , 1]
-
-postResample(predictions_5_nn_model[ , 1], test_df_reduced$retx)
+nn_model_5_layers <- build_nn_model_5_layers()
 
 
+nn_model_5_layers %>% fit(
+  x = train_df_all %>% dplyr::select(-retx),
+  y = train_df_all$retx,
+  epochs = 200,
+  batch_size = 150,
+  validation_split = 0.2,
+  verbose = 0,
+  callbacks = list(print_dot_callback)
+)
 
 summary(nn_model_5_layers)
 nn_model_5_layers  %>% save_model_tf(file = "models/5_layer_nn_model")
@@ -617,8 +591,8 @@ model_evaluation %>%
 
 ###### A benchmark model which only predicts 0 in returns
 
+benchmark_0_results <- postResample(rep(0, nrow(test_df)), test_df$retx)
 
-make_0_benchmarK(test_df ) %>% 
 tibble("Test MAE" = benchmark_0_results[[3]],
        "Model" = "0 return prediction") %>% 
   kable(caption = "Performance of 0-prediction model", 
@@ -629,10 +603,12 @@ tibble("Test MAE" = benchmark_0_results[[3]],
              zoom = 3, 
              density = 1500)
 
-### On reduced set
 
-make_0_benchmarK(test_df_reduced ) %>% 
-  tibble("Test MAE" = benchmark_0_results_all[[3]],
+### ALL observations in dataset
+
+benchmark_0_results_all <- postResample(rep(0, nrow(test_df_all)), test_df_all$retx)
+
+tibble("Test MAE" = benchmark_0_results_all[[3]],
        "Model" = "0 return prediction") %>% 
   kable(caption = "Performance of 0-prediction model", 
         digits  = 4) %>% 

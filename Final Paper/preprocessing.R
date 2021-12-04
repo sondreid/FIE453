@@ -359,8 +359,9 @@ df_selection <- selection_data %>%
     remove_NA(0.3, print_removed_cols = T) %>% 
     remove_nzv(print_removed_cols = T) %>% 
     remove_hcv(0.9, print_removed_cols = T) %>% 
-    remove_NA_rows() # Remove rows with NA's       
-
+    remove_NA_rows() %>%  # Remove rows with NA's  %>%      
+    transform(vol = as.numeric(vol),
+              shrout = as.numeric(shrout))
 # Train-Test-Split
 train_test <- perform_train_test_split(df_selection, 
                                        train_ratio = 0.8)                       # Split into train and test set with seperate sets of companies
