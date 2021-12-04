@@ -225,14 +225,13 @@ model %>% compile(
   metrics = "binary_accuracy"
 )
 
-
-
+## Three layer model
 
 spec <- feature_spec(train_df_all, retx ~ . ) %>% 
-  step_numeric_column(all_numeric(), normalizer_fn = scaler_standard()) %>% 
+  step_numeric_column(all_numeric(), normalizer_fn = scaler_standard()) %>% # Scale numeric features
   fit()
 
-build_model_3_layers <- function() {
+build_nn_model_3_layers <- function() {
   input <- layer_input_from_dataset(train_df_all %>% dplyr::select(-retx))
   
   output <- input %>% 
@@ -247,15 +246,15 @@ build_model_3_layers <- function() {
     compile(
       loss = "mse", 
       optimizer = optimizer_sgd(
-        learning_rate = 0.01,
+        learning_rate =0.001,
         momentum = 0.001,
-        decay = c(0.001, 0)),
+        decay = 0.001),
       metrics = list("mean_absolute_error")
     )
   return (model)
 }
 
-model <- build_model()
+nn_model_3_layers <- build_nn_model_3_layers()
 print_dot_callback <- callback_lambda(
   on_epoch_end = function(epoch, logs) {
     if (epoch %% 80 == 0) cat("\n")
@@ -265,24 +264,28 @@ print_dot_callback <- callback_lambda(
 
 
 
-history <- model %>% fit(
+history_model_3_layers <- model %>% fit(
   x = train_df_all %>% dplyr::select(-retx),
   y = train_df_all$retx,
-  epochs = 40,
-  batch_size = 200,
+  epochs = 200,
+  batch_size = 300,
   validation_split = 0.2,
-  verbose = 1,
+  verbose = 0,
   callbacks = list(print_dot_callback)
 )
 
+nn_model_3_layers  %>% save_model_tf(file = "models/3_layer_nn_model")
+history_model_3_layers  %>% save_model_hdf5(file = "models/3_layer_nn_model")
 
 c(loss, mae) %<-% (model %>% evaluate(test_df_all %>% dplyr::select(-retx), test_df_all$retx, verbose = 0))
 
-paste0("Mean absolute error on test set: $", sprintf("%.2f", mae * 1000))
+paste0("> Mean absolute error on test set Three layer model: ", sprintf("%.4f", mae))
 
 # Predict 
 test_predictions <- model %>% predict(test_df_all %>% dplyr::select(-retx))
 test_predictions[ , 1]
+
+postResample(test_predictions[ , 1], test_df_all$retx)
 
 
 ### Attempt to run a neural network on the entire dataset using all variables
