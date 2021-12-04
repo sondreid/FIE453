@@ -2,7 +2,6 @@
 ########################### Pre-processing #####################################
 ################################################################################
 # Candidates: 
-## REMEMBER TO FILL IN CANDIDATE NUMBERS
 
 
 
@@ -22,13 +21,14 @@ library(monomvn)
 library(kableExtra)
 library(lubridate)
 library(kknn)
+#library(RSNNS)
 library(nnet)
 
 
 
 
 # Set WD -----------------------------------------------------------------------
-#setwd("~/OneDrive - Norges Handelsh�yskole/MASTER/FIE453/FinalExam/FIE453/Final Paper")
+#setwd("~/OneDrive - Norges HandelshÃ¸yskole/MASTER/FIE453/FinalExam/FIE453/Final Paper")
 
 
 
@@ -37,23 +37,30 @@ library(nnet)
 load("data/merged.Rdata")
 company_names_df <- read.csv(file = "descriptions/names.csv") 
 feature_names_df <- read.delim(file = "descriptions/compustat-fields.txt")    
-company_names_df %<>% rename_with(tolower) %>% mutate(date = lubridate::ymd(date))
+company_names_df %<>% rename_with(tolower) %>% mutate(date = ymd(date))
 feature_names_df %<>% rename_with(tolower) 
-merged %<>% rename_with(tolower) %>% mutate(date = lubridate::ymd(date))
-
-
-## Time splitting
-
-
-selection_data <- merged %>% 
-    filter(year(date) < "2018")
-
-
-evaluation_data <- merged %>% 
-    filter(year(date) >= "2018")
+merged %<>% rename_with(tolower) 
 
 
 
+
+
+get_company_name <- function(input_permno) {
+    #'
+    #'@description: Returns the name of a company based on its company identification number
+    company_name <- company_names_df %>% 
+        filter(permno == input_permno) 
+    # If several names are registered. Pick the most recent
+    company_name %<>% arrange(desc(date))
+    return( company_name$comnam[1])
+}
+
+
+
+## Variables that cannot be inclduded with dependent variable RETX
+
+
+## REMEMBER TO INCLUDE DATE WHEN TIME SPLITTING
 
 # Irrelevant features ----------------------------------------------------------
 # Variables that cannot be included with dependent variable RETX
@@ -70,21 +77,6 @@ excluded_variables <- c("ret",
                         "datacqtr") 
 
 merged %<>% dplyr::select(-excluded_variables)
-selection_data %<>% dplyr::select(-excluded_variables)
-evaluation_data %<>% dplyr::select(-excluded_variables)
-
-
-######################## DATA PROCESSING FUNCTIONS  ##########################
-
-get_company_name <- function(input_permno) {
-    #'
-    #'@description: Returns the name of a company based on its company identification number
-    company_name <- company_names_df %>% 
-        filter(permno == input_permno) 
-    # If several names are registered. Pick the most recent
-    company_name %<>% arrange(desc(date))
-    return( company_name$comnam[1])
-}
 
 
 

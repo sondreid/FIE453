@@ -36,7 +36,7 @@ load(file = "cached_data/train_test.Rdata")
 
 df_all <- merged %>% 
   remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
-  remove_NA(0.2, print_removed_cols = T) %>% 
+  remove_NA(0.3, print_removed_cols = T) %>% 
   remove_nzv(print_removed_cols = T) %>% 
   remove_hcv(0.9, print_removed_cols = T) %>% 
   remove_NA_rows() # Remove rows with NA's       
@@ -229,9 +229,9 @@ build_nn_model_5_layers <- function() {
     compile(
       loss = "mse", 
       optimizer = optimizer_sgd(
-        learning_rate =0.001,
+        learning_rate =0.0001,
         momentum = 0.001,
-        decay = 0.001),
+        decay = 0.01),
       metrics = list("mean_absolute_error")
     )
   return (model)
@@ -243,15 +243,15 @@ nn_model_5_layers <- build_nn_model_5_layers()
 nn_model_5_layers %>% fit(
   x = train_df_all %>% dplyr::select(-retx),
   y = train_df_all$retx,
-  epochs = 50,
-  batch_size = 300,
+  epochs = 200,
+  batch_size = 150,
   validation_split = 0.2,
-  verbose = 1,
+  verbose = 0,
   callbacks = list(print_dot_callback)
 )
 
-
-nn_model_5_layers  %>% save_model_tf(file = "models/3_layer_nn_model")
+summary(nn_model_5_layers)
+nn_model_5_layers  %>% save_model_tf(file = "models/5_layer_nn_model")
 
 c(loss, mae) %<-% (nn_model_5_layers %>% evaluate(test_df_all %>% dplyr::select(-retx), test_df_all$retx, verbose = 0))
 
