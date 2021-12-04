@@ -31,57 +31,9 @@ tensorflow::use_condaenv("r-reticulate") # Specify enviroment to tensorflow
 ######### Dataframe with all companies using only variance and correlation filter#############
 # Load all 
 load(file = "cached_data/train_test.Rdata")
+# Or run the code in preprocessing
 
 
-
-df_all <- merged %>% 
-  remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
-  remove_NA(0.3, print_removed_cols = T) %>% 
-  remove_nzv(print_removed_cols = T) %>% 
-  remove_hcv(0.9, print_removed_cols = T) %>% 
-  remove_NA_rows() # Remove rows with NA's       
-
-# Train-Test-Split
-train_test <- perform_train_test_split(df_all, 
-                                       train_ratio = 0.8)                       # Split into train and test set with seperate sets of companies
-train_df_all <- train_test[[1]]
-test_df_all <- train_test[[2]]
-
-train_df_all %<>% dplyr::select(-permno) # Remove company numbers from training
-
-low_observation_count_companies <- find_company_observations(test_df_all, 60)
-test_df_all %<>% anti_join(low_observation_count_companies)                        # Cut companies with fewer than 50 observations (they cannot be reliably predicted)
-
-rm(merged, df_all) # Remove large datasets from memory
-
-save(train_df_all, test_df_all, file = "cached_data/train_test.Rdata")
-
-
-
-
-### Using only features identified by GBM model #####
-
-df_large <- 
-  get_subset_of_companies_ratio(merged, 0.6) %>% 
-  dplyr::select(retx, permno, top_5_most_important_features) %>% 
-  remove_NA_rows() # Remove NA rows
-
-
-
-low_observation_count_companies <- find_company_observations(df_large, 60)
-df_large %<>% anti_join(low_observation_count_companies)                        # Cut companies with fewer than 50 observations (they cannot be reliably predicted)
-
-
-# Train-Test-Split
-train_test <- perform_train_test_split(df_large, 
-                                       train_ratio = 0.8)                       # Split into train and test set with seperate sets of companies
-train_df <- train_test[[1]]
-test_df <- train_test[[2]]
-
-
-# Check for similar rows
-train_df %>% inner_join(test_df, by = "permno") %>% nrow()
-train_df %<>% dplyr::select(-permno) # Remove company numbers from training
 
 
 
@@ -91,6 +43,24 @@ train_df %<>% dplyr::select(-permno) # Remove company numbers from training
 
 # In order to save run time one can choose to load the model results
 load(file = "models/models.Rdata")
+
+
+
+
+
+# Train Control
+train_control <- trainControl(method = "cv",
+                              number = 10,
+                              verboseIter = T,
+                              savePredictions = T,
+                              summaryFunction = defaultSummary)
+
+
+
+# Enable parallel processing
+num_cores <- detectCores() - 3
+cl <- makePSOCKcluster(num_cores) # Use most cores, or specify
+registerDoParallel(cl)
 
 
 

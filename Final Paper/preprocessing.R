@@ -345,181 +345,72 @@ find_company_observations <- function(df, minimum_observations) {
 
 
 
-expanded_summary  <- function(data, lev = NULL, model = NULL){
-    
-    #' @description 
-    #' 
-    #' @param data
-    #' @param lev
-    #' @param model
-    
-    a1 <- defaultSummary(data, lev, model)
-    c1 <- prSummary(data, lev, model)
-    out <- c(a1, b1, c1)
-    out
-}
+
+
+################### TRAIN AND TEST SPLITS ### 
+
+
+## Apply variance and correlation filter
 
 
 
-# Train Control
-train_control <- trainControl(method = "cv",
-                              number = 10,
-                              verboseIter = T,
-                              savePredictions = T,
-                              summaryFunction = defaultSummary)
-
-
-
-# Enable parallel processing
-num_cores <- detectCores() - 3
-cl <- makePSOCKcluster(num_cores) # Use most cores, or specify
-registerDoParallel(cl)
-
-
-
-
-
-
-
-
-
-# Reduced data set for variable selection --------------------------------------
-
-
-df_reduced <- get_subset_of_companies_ratio(merged, 0.1)
-
-df_reduced %<>% 
+df_selection <- selection_data %>% 
     remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
-    remove_NA(0.2, print_removed_cols = T) %>% 
+    remove_NA(0.3, print_removed_cols = T) %>% 
     remove_nzv(print_removed_cols = T) %>% 
     remove_hcv(0.9, print_removed_cols = T) %>% 
-    remove_NA_rows() # Remove rows with NA's                             
+    remove_NA_rows() # Remove rows with NA's       
 
+# Train-Test-Split
+train_test <- perform_train_test_split(df_selection, 
+                                       train_ratio = 0.8)                       # Split into train and test set with seperate sets of companies
+train_df <- train_test[[1]]
+test_df <- train_test[[2]]
 
-
-
-
-
-
-# Train and test split
-train_test_reduced <- perform_train_test_split(df_reduced, train_ratio = 0.8)
-train_df_reduced <- train_test_reduced[[1]]
-
-test_df_reduced <- train_test_reduced[[2]]
-
-
-train_df_reduced %<>% dplyr::select(-permno, -gvkey) # Remove company numbers from training
-
-# Check for similar rows
-test_df_reduced %>% 
+test_df %>% 
     inner_join(train_df_reduced, by = "permno") %>% 
     nrow()
 
+train_df %<>% dplyr::select(-permno) # Remove company numbers from training
+
+low_observation_count_companies <- find_company_observations(test_df, 50)
+test_df %<>% anti_join(low_observation_count_companies)                        # Cut companies with fewer than 50 observations (they cannot be reliably predicted)
 
 
 
 
 
-
-
-
-################################################################################
-############################# Variable importance ##############################
-################################################################################
-
-
-feature_selection <- function() {
-        # Random Forest ----------------------------------------------------------------
-        set.seed(1)
-        
-        mtry <- round(sqrt(ncol(train_df_reduced)))
-        
-        tunegrid_rf <- expand.grid(.mtry = 2)
-        
-        rf <- train(retx~.,
-                    data       = train_df_reduced,
-                    method     = "rf",
-                    importance = TRUE,
-                    metric     = "MAE",
-                    preProcess = c("center","scale"),
-                    tuneGrid   = tunegrid_rf,
-                    trControl  = train_control)
-        
-        rf$results$MAE %>% min() # Validation MAE
-        
-        # Most important features according to RF model
-        var_importance_rf <- varImp(rf, scale = F)
-        var_importance_rf
-        
-        # Test performance
-        rf_predictions <- predict(rf, test_df_reduced)
-        postResample(pred = rf_predictions, obs = test_df_reduced$retx)
-        
-        
-        # GBM --------------------------------------------------------------------------
-        
-        tunegrid_gbm <-  expand.grid(interaction.depth = c(1, 5, 9), 
-                                n.trees = (1:30) * 50, 
-                                shrinkage = c(0.1, 0.2),
-                                n.minobsinnode = c(5,10,20))
-        
-        gbm <- train(retx~.,
-                     data       = train_df_reduced,
-                     method     = "gbm",
-                     metric     = "MAE",
-                     preProcess = c("center","scale"),
-                     tuneGrid   = tunegrid_gbm,
-                     trControl  = train_control)
-        
-        gbm$results$MAE %>% min() # Validation MAE
-        
-        
-        # Test performance
-        gbm_predictions <- predict(gbm, test_df_reduced)
-        postResample(pred = gbm_predictions, obs = test_df_reduced$retx)
-        
-        
-        
-        # Most important features according to gradient boosting model
-        var_importance_gbm <- varImp(gbm, scale = T)
-
-        
-        if (postResample(pred = gbm_predictions, obs = test_df_reduced$retx)[[3]] < postResample(pred = rf_predictions, obs = test_df_reduced$retx)[[1]] ) {
-            # Store most important features
-            print("> GBM model used for feature selection")
-            most_important_features <- var_importance_gbm
-        
-            
-        } 
-        else  most_important_features <- var_importance_rf 
-        
-        
-        most_important_features <- 
-            tibble(features = var_importance_gbm$importance %>% 
-                       as.data.frame() %>% row.names(),
-                   score = var_importance_gbm$importance) %>% 
-            arrange(desc(score$Overall))
-        
-        
-        
-        
-        # Saving
-        save(rf_predictions, gbm_predictions, most_important_features, file = "model_results/features.Rdata")
-
-}
-"Uncomment to run feature selection"
-#feature_selection()
-# Load most important variables
-load(file = "model_results/features.Rdata")
-
-
-top_5_most_important_features <- most_important_features$features[1:5] # Select only most important variables for predicting RETX
+save(train_df_all, test_df_all, file = "cached_data/train_test.Rdata") # Save datasets
 
 
 
 
-# Stop cluster
-stopCluster(cl)
+### REDUCED DATA SET FOR TESTING
+
+df_selection_reduced <- get_subset_of_companies_ratio(selection_data, 0.1) %>% 
+    remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
+    remove_NA(0.3, print_removed_cols = T) %>% 
+    remove_nzv(print_removed_cols = T) %>% 
+    remove_hcv(0.9, print_removed_cols = T) %>% 
+    remove_NA_rows() # Remove rows with NA's       
+
+# Train-Test-Split
+train_test_reduced <- perform_train_test_split(df_selection_reduced, 
+                                       train_ratio = 0.8)                       # Split into train and test set with seperate sets of companies
+train_df_reduced <- train_test_reduced[[1]]
+test_df_reduced <- train_test_reduced[[2]]
+
+train_df_reduced %<>% dplyr::select(-permno) # Remove company numbers from training
+
+low_observation_count_companies <- find_company_observations(test_df_all, 50)
+test_df_reduced %<>% anti_join(low_observation_count_companies)                        # Cut companies with fewer than 50 observations (they cannot be reliably predicted)
+
+
+
+rm(merged, df_selection) # Remove large datasets from memory
+
+
+
 
 
 
