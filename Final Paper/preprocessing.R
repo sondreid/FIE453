@@ -368,7 +368,7 @@ train_df <- train_test[[1]]
 test_df <- train_test[[2]]
 
 test_df %>% 
-    inner_join(train_df_reduced, by = "permno") %>% 
+    inner_join(train_df, by = "permno") %>% 
     nrow()
 
 train_df %<>% dplyr::select(-permno) # Remove company numbers from training
@@ -379,20 +379,9 @@ test_df %<>% anti_join(low_observation_count_companies)                        #
 
 
 
-
-save(train_df_all, test_df_all, file = "cached_data/train_test.Rdata") # Save datasets
-
-
-
-
 ### REDUCED DATA SET FOR TESTING
 
-df_selection_reduced <- get_subset_of_companies_ratio(selection_data, 0.1) %>% 
-    remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
-    remove_NA(0.3, print_removed_cols = T) %>% 
-    remove_nzv(print_removed_cols = T) %>% 
-    remove_hcv(0.9, print_removed_cols = T) %>% 
-    remove_NA_rows() # Remove rows with NA's       
+df_selection_reduced <- get_subset_of_companies_ratio(df_selection, 0.1) 
 
 # Train-Test-Split
 train_test_reduced <- perform_train_test_split(df_selection_reduced, 
@@ -407,7 +396,13 @@ test_df_reduced %<>% anti_join(low_observation_count_companies)                 
 
 
 
-rm(merged, df_selection) # Remove large datasets from memory
+### SAVE datasets
+
+save(train_df, test_df, train_df_reduced, test_df_reduced, file = "cached_data/train_test.Rdata") 
+
+
+
+rm(merged, df_selection, df_selection_reduced) # Remove large datasets from memory
 
 
 

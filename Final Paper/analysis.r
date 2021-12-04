@@ -16,7 +16,7 @@ library(tensorflow)
 library(keras)
 library(tfdatasets)
 library(reticulate)
-use_session_with_seed(42, disable_gpu = FALSE, disable_parallel_cpu = FALSE) # Keras seed
+set_random_seed (42, disable_gpu = FALSE) # Keras seed
 conda_python(envname = "r-reticulate") # Create miniconda enviroment (if not already done)
 tensorflow::use_condaenv("r-reticulate") # Specify enviroment to tensorflow
 
@@ -169,9 +169,15 @@ postResample(multi_hidden_preds, test_df_all$retx)
 
 ### Keras multilayer
 
-spec <- feature_spec(train_df_all, retx ~ . ) %>% 
+spec <- feature_spec(train_df, retx ~ . ) %>% 
   step_numeric_column(all_numeric(), normalizer_fn = scaler_standard()) %>% # Scale numeric features
   fit()
+
+
+spec_reduced <- feature_spec(train_df_reduced, retx ~ . ) %>% 
+  step_numeric_column(all_numeric(), normalizer_fn = scaler_standard()) %>% # Scale numeric features
+  fit()
+
 
 
 print_dot_callback <- callback_lambda(
@@ -180,6 +186,69 @@ print_dot_callback <- callback_lambda(
     cat(".")
   }
 ) 
+
+
+
+build_nn_model_5_layers <- function(selected_train_df, selected_spec) {
+  input <- layer_input_from_dataset(selected_train_df %>% dplyr::select(-retx))
+  
+  output <- input %>% 
+    layer_dense_features(dense_features(selected_spec)) %>% 
+    layer_dense(units = 64, activation = "relu") %>%
+    layer_dense(units = 32, activation = "relu") %>%
+    layer_dense(units = 16, activation = "relu") %>%
+    layer_dense(units = 18, activation = "relu") %>%
+    layer_dense(units = 4,  activation = "relu") 
+  
+  model <- keras_model(input, output)
+  
+  return (model)
+}
+
+nn_model_5_layers_reduced <- build_nn_model_5_layers(train_df_reduced, spec_reduced)
+
+
+grid_search_nn_model <- function(model, model_train_df, model_test_df, learning_rates, momentums) {
+  
+  best_MAE <- Inf
+  best_model <- NA
+  for (lr in learning_rates) {
+    for (momentum in momentums) {
+        new_model <- model %>% 
+          compile(
+            loss = "mse", 
+            optimizer = optimizer_sgd(
+              learning_rate =lr,
+              momentum = momentum,
+              decay = 0.01),
+            metrics = list("mean_absolute_error"))
+        
+        
+        new_model %>% 
+              fit(
+              x = model_train_df %>% dplyr::select(-retx),
+              y = model_train_df$retx,
+              epochs = 5,
+              batch_size = 150,
+              validation_split = 0.2,
+              verbose = 0,
+              callbacks = list(print_dot_callback)
+          )
+      c(loss, mae) %<-% (new_model %>% evaluate(model_test_df %>% dplyr::select(-retx), model_test_df$retx, verbose = 0))
+      if (mae < best_MAE) {
+        best_model <- new_model
+        best_MAE <- mae
+      }
+    }
+  }
+  return (best_model)
+
+}
+
+best_model <- grid_search_nn_model(nn_model_5_layers_reduced, train_df_reduced, test_df_reduced, learning_rates = list(0.001, 0.000005), momentums = list(0, 0.001))
+
+
+
 
 ## Five layer model
 build_nn_model_5_layers <- function() {
