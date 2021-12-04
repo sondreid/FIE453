@@ -42,36 +42,6 @@ feature_names_df %<>% rename_with(tolower)
 merged %<>% rename_with(tolower) %>% mutate(date = lubridate::ymd(date))
 
 
-## Time splitting
-
-
-selection_data <- merged %>% 
-    filter(year(date) < "2018")
-
-
-evaluation_data <- merged %>% 
-    filter(year(date) >= "2018")
-
-
-
-
-# Irrelevant features ----------------------------------------------------------
-# Variables that cannot be included with dependent variable RETX
-excluded_variables <- c("ret", 
-                        "prc",         # Price should maybe be allowed
-                        "vwretd",      # vwretd: market excess return
-                        "datadate",
-                        "date",        # Remove all date related variables
-                        "datafqtr",
-                        "fyearq",
-                        "gvkey", # Company identifier
-                        "fyr",
-                        "fqtr",
-                        "datacqtr") 
-
-merged %<>% dplyr::select(-excluded_variables)
-selection_data %<>% dplyr::select(-excluded_variables)
-evaluation_data %<>% dplyr::select(-excluded_variables)
 
 
 ######################## DATA PROCESSING FUNCTIONS  ##########################
@@ -343,27 +313,74 @@ find_company_observations <- function(df, minimum_observations) {
     return(df)
 }
 
+######################### Time splitting
 
+
+selection_data <- merged %>% 
+    filter(year(date) < "2018")
+
+
+evaluation_data <- merged %>% 
+    filter(year(date) >= "2018")
+
+
+
+
+
+
+# Irrelevant features ----------------------------------------------------------
+# Variables that cannot be included with dependent variable RETX
+excluded_variables <- c("ret", 
+                        "prc",         # Price should maybe be allowed
+                        "vwretd",      # vwretd: market excess return
+                        "datadate",
+                        "date",        # Remove all date related variables
+                        "datafqtr",
+                        "fyearq",
+                        "gvkey", # Company identifier
+                        "fyr",
+                        "fqtr",
+                        "datacqtr") 
+
+
+selection_data %<>% dplyr::select(-excluded_variables)
+evaluation_data %<>% dplyr::select(-excluded_variables)
+
+
+
+
+
+# Applying preprocessing steps
+## Apply variance and correlation filter
+
+selection_data %<>% 
+    remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
+    remove_NA(0.3, print_removed_cols = T) %>% 
+    remove_nzv(print_removed_cols = T) %>% 
+    remove_hcv(0.9, print_removed_cols = T) %>% 
+    remove_NA_rows() %>%  # Remove rows with NA's       
+    transform(vol = as.numeric(vol),
+              shrout = as.numeric(shrout)) 
+
+
+evaluation_data %<>% 
+    remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
+    remove_NA(0.3, print_removed_cols = T) %>% 
+    remove_nzv(print_removed_cols = T) %>% 
+    remove_hcv(0.9, print_removed_cols = T) %>% 
+    remove_NA_rows() %>%  # Remove rows with NA's        
+    transform(vol = as.numeric(vol),
+              shrout = as.numeric(shrout)) 
 
 
 
 ################### TRAIN AND TEST SPLITS ### 
 
 
-## Apply variance and correlation filter
 
 
-
-df_selection <- selection_data %>% 
-    remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
-    remove_NA(0.3, print_removed_cols = T) %>% 
-    remove_nzv(print_removed_cols = T) %>% 
-    remove_hcv(0.9, print_removed_cols = T) %>% 
-    remove_NA_rows() %>%  # Remove rows with NA's  %>%      
-    transform(vol = as.numeric(vol),
-              shrout = as.numeric(shrout))
 # Train-Test-Split
-train_test <- perform_train_test_split(df_selection, 
+train_test <- perform_train_test_split(selection_data, 
                                        train_ratio = 0.8)                       # Split into train and test set with seperate sets of companies
 train_df <- train_test[[1]]
 test_df <- train_test[[2]]
@@ -382,10 +399,10 @@ test_df %<>% anti_join(low_observation_count_companies)                        #
 
 ### REDUCED DATA SET FOR TESTING
 
-df_selection_reduced <- get_subset_of_companies_ratio(df_selection, 0.1) 
+selection_data_reduced <- get_subset_of_companies_ratio(selection_data, 0.15) 
 
 # Train-Test-Split
-train_test_reduced <- perform_train_test_split(df_selection_reduced, 
+train_test_reduced <- perform_train_test_split(selection_data_reduced, 
                                        train_ratio = 0.8)                       # Split into train and test set with seperate sets of companies
 train_df_reduced <- train_test_reduced[[1]]
 test_df_reduced <- train_test_reduced[[2]]
@@ -399,7 +416,7 @@ test_df_reduced %<>% anti_join(low_observation_count_companies)                 
 
 ### SAVE datasets
 
-save(train_df, test_df, train_df_reduced, test_df_reduced, file = "cached_data/train_test.Rdata") 
+save(train_df, selection_data, test_df, train_df_reduced, test_df_reduced, file = "cached_data/train_test.Rdata") 
 
 
 
