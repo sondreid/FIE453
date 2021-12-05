@@ -25,6 +25,7 @@ library(kknn)
 library(nnet)
 
 
+set.seed(1)
 
 
 # Set WD -----------------------------------------------------------------------
@@ -322,7 +323,7 @@ find_company_observations <- function(df, minimum_observations) {
 
 
 merged %<>% remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
-    remove_NA(0.3, print_removed_cols = T) %>% 
+    remove_NA(0.2, print_removed_cols = T) %>% 
     remove_nzv(print_removed_cols = T) %>% 
     remove_hcv(0.9, print_removed_cols = T) %>% 
     remove_NA_rows() %>%  # Remove rows with NA's       
@@ -334,10 +335,9 @@ merged %<>% remove_cols_only_zero_and_NA(print_removed_cols = T) %>%
 # Variables that cannot be included with dependent variable RETX
 excluded_variables <- c("ret", 
                         "prc",         # Price should maybe be allowed
-                        "vwretd",      # vwretd: market excess return
-                        "datadate",
                         "datafqtr",# Remove all date related variables
                         "fyearq",
+                        "datacqtr",
                         "gvkey", # Company identifier
                         "fyr",
                         "fqtr",
@@ -361,29 +361,6 @@ evaluation_data <- merged %>%
 
 selection_data %<>% dplyr::select(-date)
 
-
-
-# Applying preprocessing steps
-## Apply variance and correlation filter
-
-selection_data %<>% 
-    remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
-    remove_NA(0.3, print_removed_cols = T) %>% 
-    remove_nzv(print_removed_cols = T) %>% 
-    remove_hcv(0.9, print_removed_cols = T) %>% 
-    remove_NA_rows() %>%  # Remove rows with NA's       
-    transform(vol = as.numeric(vol),
-              shrout = as.numeric(shrout)) 
-
-
-evaluation_data %<>% 
-    remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
-    remove_NA(0.3, print_removed_cols = T) %>% 
-    remove_nzv(print_removed_cols = T) %>% 
-    remove_hcv(0.9, print_removed_cols = T) %>% 
-    remove_NA_rows() %>%  # Remove rows with NA's        
-    transform(vol = as.numeric(vol),
-              shrout = as.numeric(shrout)) 
 
 
 
@@ -412,7 +389,7 @@ test_df %<>% anti_join(low_observation_count_companies)                        #
 
 ### REDUCED DATA SET FOR TESTING
 
-selection_data_reduced <- get_subset_of_companies_ratio(selection_data, 0.15) 
+selection_data_reduced <- get_subset_of_companies_ratio(selection_data, 0.1) 
 
 # Train-Test-Split
 train_test_reduced <- perform_train_test_split(selection_data_reduced, 
@@ -422,7 +399,7 @@ test_df_reduced <- train_test_reduced[[2]]
 
 train_df_reduced %<>% dplyr::select(-permno) # Remove company numbers from training
 
-low_observation_count_companies <- find_company_observations(test_df_all, 50)
+low_observation_count_companies <- find_company_observations(test_df_reduced, 50)
 test_df_reduced %<>% anti_join(low_observation_count_companies)                        # Cut companies with fewer than 50 observations (they cannot be reliably predicted)
 
 
