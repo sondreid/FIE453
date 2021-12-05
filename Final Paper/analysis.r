@@ -403,6 +403,19 @@ postResample(predictions_5_nn_model[ , 1], test_df_reduced$retx)
 make_0_benchmark(test_df_reduced) 
 
 
+
+
+
+
+## Save models
+
+best_model_nn_3_layer_adam[[1]]  %>% save_model_tf("models/3_layer_nn_model")
+best_model_nn_3_layer_adam[[2]]  %>% save_model_hdf5("models/3_layer_nn_model")
+
+save(best_model_nn_3_layer_adam, file = "models/3_nn_layer_model_history.Rdata")
+
+
+
 # Train Control 
 
 parts <- createDataPartition(train_df_reduced$retx, times = 1, p = 0.2) # 20 % of training data is used for validation (i.e, hyperparameter selection)
