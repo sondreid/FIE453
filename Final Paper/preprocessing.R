@@ -313,6 +313,42 @@ find_company_observations <- function(df, minimum_observations) {
     return(df)
 }
 
+
+
+
+
+# Applying preprocessing steps
+## Apply variance and correlation filter
+
+
+merged %<>% remove_cols_only_zero_and_NA(print_removed_cols = T) %>% 
+    remove_NA(0.3, print_removed_cols = T) %>% 
+    remove_nzv(print_removed_cols = T) %>% 
+    remove_hcv(0.9, print_removed_cols = T) %>% 
+    remove_NA_rows() %>%  # Remove rows with NA's       
+    transform(vol = as.numeric(vol),
+              shrout = as.numeric(shrout)) 
+
+
+# Irrelevant features ----------------------------------------------------------
+# Variables that cannot be included with dependent variable RETX
+excluded_variables <- c("ret", 
+                        "prc",         # Price should maybe be allowed
+                        "vwretd",      # vwretd: market excess return
+                        "datadate",
+                        "datafqtr",# Remove all date related variables
+                        "fyearq",
+                        "gvkey", # Company identifier
+                        "fyr",
+                        "fqtr",
+                        "datacqtr") 
+
+merged %<>%  dplyr::select(-excluded_variables)
+
+
+
+
+
 ######################### Time splitting
 
 
@@ -323,30 +359,7 @@ selection_data <- merged %>%
 evaluation_data <- merged %>% 
     filter(year(date) >= "2018")
 
-
-
-
-
-
-# Irrelevant features ----------------------------------------------------------
-# Variables that cannot be included with dependent variable RETX
-excluded_variables <- c("ret", 
-                        "prc",         # Price should maybe be allowed
-                        "vwretd",      # vwretd: market excess return
-                        "datadate",
-                        "date",        # Remove all date related variables
-                        "datafqtr",
-                        "fyearq",
-                        "gvkey", # Company identifier
-                        "fyr",
-                        "fqtr",
-                        "datacqtr") 
-
-
-selection_data %<>% dplyr::select(-excluded_variables)
-evaluation_data %<>% dplyr::select(-excluded_variables)
-
-
+selection_data %<>% dplyr::select(-date)
 
 
 

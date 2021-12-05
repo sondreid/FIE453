@@ -197,13 +197,13 @@ grid_search_nn_model <- function(selected_model, model_train_df, model_test_df, 
       }
     }
   }
-  return (best_model)
+  return list((best_model, best_history))
 
 }
 
 
-grid_search_nn_model_ada_delta <- function(model, model_train_df, model_test_df,
-                                         epochs, batch_sizes, verbose) {
+grid_search_nn_model_generaL-optimizer <- function(model, model_train_df, model_test_df,
+                                         epochs, batch_sizes, optimizer, verbose) {
   
   best_MAE <- Inf
   best_model <- NA
@@ -213,7 +213,7 @@ grid_search_nn_model_ada_delta <- function(model, model_train_df, model_test_df,
           new_model <- model %>% 
             compile(
               loss = "mse", 
-              optimizer = optimizer_adadelta(),
+              optimizer = optimizer,
               metrics = list("mean_absolute_error"))
           
           
@@ -240,55 +240,8 @@ grid_search_nn_model_ada_delta <- function(model, model_train_df, model_test_df,
   
 }
 
-grid_search_nn_model_rmsprop <- function(model, model_train_df, model_test_df, learning_rates, momentums,
-                                 epochs, batch_sizes, verbose) {
-  
-  best_MAE <- Inf
-  best_model <- NA
-  for (lr in learning_rates) {
-    for (momentum in momentums) {
-      for (epoch in epochs) {
-        for (batch_size in batch_sizes) {
-          new_model <- model %>% 
-            compile(
-              loss = "mse", 
-              optimizer = optimizer_rmsprop(learning_rate = lr),
-              metrics = list("mean_absolute_error"))
-          
-          
-          history <- new_model %>% 
-            fit(
-              x = model_train_df %>% dplyr::select(-retx),
-              y = model_train_df$retx,
-              epochs = epoch,
-              batch_size = batch_size,
-              validation_split = 0.2,
-              verbose = verbose,
-              callbacks = list(print_dot_callback, early_stop) #Print simplified dots, and stop learning when validation improvements stalls
-            )
-          c(loss, mae) %<-% (new_model %>% evaluate(model_test_df %>% dplyr::select(-retx), model_test_df$retx, verbose = 0))
-          if (mae < best_MAE) {
-            best_model <- history
-            best_MAE <- mae
-          }
-        }
-      }
-    }
-  }
-  return (best_model)
-  
-}
 
-best_model_rms_prop  <- grid_search_nn_model_rmsprop(nn_model_5_layers_reduced, train_df_reduced, test_df_reduced, 
-                                             learning_rates = list(0.001, 0.01),
-                                             momentums = list(0),
-                                             batch_sizes = list(50, 80, 400, 1000, 10000),
-                                             epochs = list(20, 50, 70, 300),
-                                             verbose = 0
-                                             
-)
-
-best_model_nn_5_layer <- grid_search_nn_model(nn_model_5_layers_reduced, train_df_reduced, test_df_reduced, 
+best_model_nn_5_layer <- grid_search_nn_model(nn_model_5_layers_reduced, train_df, test_df_reduced, 
                                    learning_rates = list(0.01, 0.0001),
                                    momentums = list(0, 0.001),
                                    batch_sizes = list(100, 500, 1500),
@@ -298,14 +251,14 @@ best_model_nn_5_layer <- grid_search_nn_model(nn_model_5_layers_reduced, train_d
                                    )
 
 
-predictions_5_nn_model <- best_model_nn_5_layer %>% predict(test_df_reduced %>% dplyr::select(-retx))
+predictions_5_nn_model <- best_model_nn_5_layer %>% predict(test_df %>% dplyr::select(-retx))
 predictions_5_nn_model[ , 1]
 
-postResample(predictions_5_nn_model[ , 1], test_df_reduced$retx)
+postResample(predictions_5_nn_model[ , 1], test_df$retx)
 
 
 # Better than 0 benchmark?
-make_0_benchmark(test_df_reduced) 
+make_0_benchmark(test_df) 
 make_0_benchmark(test_df_reduced)[[3]] > postResample(predictions_5_nn_model[ , 1], test_df_reduced$retx)[[3]]
 
 
@@ -343,7 +296,7 @@ c(loss, mae) %<-% (nn_model_5_layers %>% evaluate(test_df_all %>% dplyr::select(
 paste0("> Mean absolute error on test set Three layer model: ", sprintf("%.4f", mae))
 
 # Predict 
-predictions_5_nn_model <- nn_model_5_layers %>% predict(test_df_all %>% dplyr::select(-retx))
+predictions_5_nn_model <- nn_model_5_layers %>% predict(test_df %>% dplyr::select(-retx))
 predictions_5_nn_model[ , 1]
 
 postResample(predictions_5_nn_model[ , 1], test_df_all$retx)
@@ -362,16 +315,16 @@ best_model_nn_3_layer <- grid_search_nn_model(nn_model_3_layers_reduced, train_d
 )
 
 
-predictions_3_nn_model <- best_model %>% predict(test_df_reduced %>% dplyr::select(-retx))
+predictions_3_nn_model <- best_model %>% predict(test_df %>% dplyr::select(-retx))
 predictions_3_nn_model[ , 1]
 
-postResample(predictions_3_nn_model[ , 1], test_df_reduced$retx)
+postResample(predictions_3_nn_model[ , 1], test_df$retx)
 
 
 
 ### One layers
 
-best_model_nn_1_layer <- grid_search_nn_model(nn_model_1_layer_reduced, train_df_reduced, test_df_reduced, 
+best_model_nn_1_layer <- grid_search_nn_model(nn_model_1_layer_reduced, train_df, test_df_reduced, 
                                    learning_rates = list(0.01, 0.0001),
                                    momentums = list(0, 0.001),
                                    batch_sizes = list(100, 500, 1500),
@@ -399,7 +352,6 @@ parts <- createDataPartition(train_df$retx, times = 1, p = 0.2) # 20 % of traini
 
 train_control <- trainControl(method = "cv", #Method does not matter as parts dictate 20 % validation of training set
                               index = parts, 
-                              number = 10,
                               verboseIter = T,
                               savePredictions = T,
                               summaryFunction = defaultSummary)
