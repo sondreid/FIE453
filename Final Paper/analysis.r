@@ -96,11 +96,19 @@ build_nn_model_5_layers <- function(selected_train_df, selected_spec) {
   
   output <- input %>% 
     layer_dense_features(dense_features(selected_spec)) %>% 
-    layer_dense(units = 32, activation = "relu") %>%
-    layer_dense(units = 16, activation = "relu") %>%
-    layer_dense(units = 8, activation = "relu") %>%
-    layer_dense(units = 4,  activation = "relu") %>%
-    layer_dense(units = 2,  activation = "relu") 
+    layer_dense(units = 32) %>%
+    layer_batch_normalization() %>% 
+    layer_activation(activation = "relu") %>% 
+    layer_dense(units = 16) %>%
+    layer_batch_normalization() %>% 
+    layer_activation(activation = "relu") %>% 
+    layer_dense(units = 8) %>%
+    layer_batch_normalization() %>% 
+    layer_activation(activation = "relu") %>% 
+    layer_dense(units = 4) %>%
+    layer_batch_normalization() %>% 
+    layer_activation(activation = "relu") %>% 
+    layer_dense(units = 2) 
   
   model <- keras_model(input, output)
   
@@ -108,22 +116,7 @@ build_nn_model_5_layers <- function(selected_train_df, selected_spec) {
 }
 
 
-build_nn_model_3_layers <- function(selected_train_df, selected_spec) {
-  input <- layer_input_from_dataset(selected_train_df %>% dplyr::select(-retx))
-  
-  output <- input %>% 
-    layer_dense_features(dense_features(selected_spec)) %>% 
-    layer_dense(units = 32, activation = "relu") %>%
-    layer_batch_normalization() %>% 
-    layer_dense(units = 16, activation = "relu") %>%
-    layer_batch_normalization() %>% 
-    layer_dense(units = 8,  activation = "relu") %>% 
-    layer_batch_normalization()
-  
-  model <- keras_model(input, output)
-  return(model)
-  
-}
+
 
 build_nn_model_3_layers <- function(selected_train_df, selected_spec) {
   input <- layer_input_from_dataset(selected_train_df %>% dplyr::select(-retx))
@@ -133,12 +126,11 @@ build_nn_model_3_layers <- function(selected_train_df, selected_spec) {
     layer_dense(units = 32) %>%
     layer_batch_normalization() %>% 
     layer_activation(activation = "relu") %>% 
-    layer_dense(units = 32) %>%
+    layer_dense(units = 16) %>%
     layer_batch_normalization() %>% 
     layer_activation(activation = "relu") %>% 
-    layer_dense(units = 32) %>%
-    layer_batch_normalization() %>% 
-    layer_activation(activation = "relu") 
+    layer_dense(units = 8) 
+
     
   
   model <- keras_model(input, output)
@@ -152,16 +144,14 @@ build_nn_model_1_layer <- function(selected_train_df, selected_spec) {
   
   output <- input %>% 
     layer_dense_features(dense_features(selected_spec)) %>% 
-    layer_dense(units = 32, activation = "relu") 
+    layer_dense(units = 32) 
     
     model <- keras_model(input, output)
   return(model)
   
 }
 
-nn_model_1_layer_reduced <- build_nn_model_1_layer(train_df_reduced, spec_reduced)
-nn_model_3_layers_reduced <- build_nn_model_3_layers(train_df_reduced, spec_reduced)
-nn_model_5_layers_reduced <- build_nn_model_5_layers(train_df_reduced, spec_reduced)
+
 
 
 grid_search_nn_model <- function(selected_model, model_train_df, model_test_df, learning_rates, momentums,
@@ -221,7 +211,8 @@ grid_search_nn_model_generaL_optimizer <- function(selected_model, model_train_d
     for (epoch in epochs) {
         for (batch_size in batch_sizes) {
           for (patience in patience_list) {
-            new_early_stop <- callback_reduce_lr_on_plateau(monitor = "val_loss", patience = patience)
+            reduce_lr <- callback_reduce_lr_on_plateau(monitor = "val_loss", patience = patience)
+            new_early_stop <- callback_early_stopping(monitor = "val_loss", patience = patience)
             new_model <- selected_model %>% 
               compile(
                 loss = "mse", 
@@ -237,7 +228,7 @@ grid_search_nn_model_generaL_optimizer <- function(selected_model, model_train_d
                 batch_size = batch_size,
                 validation_split = 0.2,
                 verbose = verbose,
-                callbacks = list(print_dot_callback, new_early_stop) #Print simplified dots, and stop learning when validation improvements stalls
+                callbacks = list(print_dot_callback, reduce_lr, new_early_stop) #Print simplified dots, and stop learning when validation improvements stalls
               )
             c(loss, mae) %<-% (new_model %>% evaluate(model_test_df %>% dplyr::select(-retx), model_test_df$retx, verbose = 0))
             if (mae < best_MAE) {
@@ -255,85 +246,27 @@ grid_search_nn_model_generaL_optimizer <- function(selected_model, model_train_d
 
 
 
-best_model_nn_3_layer <- grid_search_nn_model(nn_model_3_layers_reduced, train_df_reduced, test_df_reduced, 
-                                              learning_rates = list(0.01, 0.1,  0.0001),
-                                              momentums = list(0, 0.001),
-                                              batch_sizes = list(50, 100, 500, 1500),
-                                              epochs = list(200),
-                                              patience_list = list(10, 15, 50),
-                                              verbose = 0
-                                              
-)
+nn_model_1_layer_reduced <- build_nn_model_1_layer(train_df_reduced, spec_reduced)
+nn_model_3_layers_reduced <- build_nn_model_3_layers(train_df_reduced, spec_reduced)
+nn_model_5_layers_reduced <- build_nn_model_5_layers(train_df_reduced, spec_reduced)
 
 
 
-best_model_nn_5_layer <- grid_search_nn_model(nn_model_5_layers_reduced, train_df, test_df_reduced, 
-                                   learning_rates = list(0.01, 0.0001),
-                                   momentums = list(0, 0.001),
-                                   batch_sizes = list(100, 500, 1500),
-                                   epochs = list(30, 100, 200),
-                                   verbose = 0
-                                   
-                                   )
-
-
-predictions_5_nn_model <- best_model_nn_5_layer %>% predict(test_df %>% dplyr::select(-retx))
-predictions_5_nn_model[ , 1]
-
-postResample(predictions_5_nn_model[ , 1], test_df$retx)
-
-
-# Better than 0 benchmark?
-make_0_benchmark(test_df) 
-make_0_benchmark(test_df_reduced)[[3]] > postResample(predictions_5_nn_model[ , 1], test_df_reduced$retx)[[3]]
+nn_model_1_layer <- build_nn_model_1_layer(train_df, spec)
+nn_model_3_layers <- build_nn_model_3_layers(train_df, spec)
+nn_model_5_layers <- build_nn_model_5_layers(train_df, spec)
 
 
 
 
+#load nn models
 
 
 
-### Three layers
-
-best_model_nn_3_layer <- grid_search_nn_model(nn_model_3_layers_reduced, train_df_reduced, test_df_reduced, 
-                                   learning_rates = list(0.01, 0.0001),
-                                   momentums = list(0, 0.001),
-                                   batch_sizes = list(100, 500, 1500),
-                                   epochs = list(30, 100, 200, 500),
-                                   verbose = 0
-                                   
-)
+load("models/3_nn_layer_model_history.Rdata")
 
 
-predictions_3_nn_model <- best_model %>% predict(test_df %>% dplyr::select(-retx))
-predictions_3_nn_model[ , 1]
-
-postResample(predictions_3_nn_model[ , 1], test_df$retx)
-
-
-
-### One layers
-
-best_model_nn_1_layer <- grid_search_nn_model(nn_model_1_layer_reduced, train_df, test_df_reduced, 
-                                   learning_rates = list(0.01, 0.0001),
-                                   momentums = list(0, 0.001),
-                                   batch_sizes = list(100, 500, 1500),
-                                   epochs = list(30, 100, 200, 500),
-                                   verbose = 0
-                                   
-)
-
-
-predictions_1_nn_model <- best_model_nn_1_layer %>% predict(test_df_reduced %>% dplyr::select(-retx))
-predictions_1_nn_model[ , 1]
-
-postResample(predictions_1_nn_model[ , 1], test_df_reduced$retx)
-
-
-
-
-
-### ADAM attempts
+### ADAM optimizer
 
 adam_opt = optimizer_adam()
 
@@ -404,6 +337,63 @@ make_0_benchmark(test_df_reduced)
 
 
 
+#### RUN ON entire dataset
+
+
+
+
+best_model_nn_1_layer_all <- grid_search_nn_model_generaL_optimizer(nn_model_1_layer, train_df, test_df, 
+                                                                     batch_sizes = list(100, 500, 7000),
+                                                                     epochs = list(200),
+                                                                     optimizer = adam_opt,
+                                                                     patience_list = list(5, 15, 25, 50),
+                                                                     verbose = 0
+                                                                     
+)
+
+predictions_1_nn_model <- best_model_nn_1_layer_all[[1]] %>% predict(test_df %>% dplyr::select(-retx))
+predictions_1_nn_model[ , 1]
+
+postResample(predictions_1_nn_model[ , 1], test_df$retx)
+
+save(best_model_nn_1_layer_all, file = "models/1_nn_layer_model_all.Rdata")
+
+best_model_nn_3_layers_all <- grid_search_nn_model_generaL_optimizer(nn_model_3_layers, train_df, test_df, 
+                                                                    batch_sizes = list(100, 500, 7000),
+                                                                    epochs = list(200),
+                                                                    optimizer = adam_opt,
+                                                                    patience_list = list(5, 15, 25, 50),
+                                                                    verbose = 0
+                                                                    
+)
+predictions_3_nn_model <- best_model_nn_3_layers_all[[1]] %>% predict(test_df %>% dplyr::select(-retx))
+predictions_3_nn_model[ , 1]
+
+postResample(predictions_3_nn_model[ , 1], test_df$retx)
+
+
+save(best_model_nn_3_layers_all, file = "models/3_nn_layer_model_all.Rdata")
+
+
+best_model_nn_5_layers_all <- grid_search_nn_model_generaL_optimizer(nn_model_5_layers, train_df, test_df, 
+                                                                     batch_sizes = list(100, 500, 7000),
+                                                                     epochs = list(200),
+                                                                     optimizer = adam_opt,
+                                                                     patience_list = list(5, 15, 25, 50),
+                                                                     verbose = 0
+                                                                     
+)
+predictions_5_nn_model <- best_model_nn_5_layers_all[[1]] %>% predict(test_df %>% dplyr::select(-retx))
+predictions_5_nn_model[ , 1]
+
+postResample(predictions_5_nn_model[ , 1], test_df$retx)
+
+
+
+save(best_model_nn_5_layers_all, file = "models/5_nn_layer_model_all.Rdata")
+
+
+
 
 
 
@@ -416,9 +406,11 @@ save(best_model_nn_3_layer_adam, file = "models/3_nn_layer_model_history.Rdata")
 
 
 
+
+
 # Train Control 
 
-parts <- createDataPartition(train_df_reduced$retx, times = 1, p = 0.2) # 20 % of training data is used for validation (i.e, hyperparameter selection)
+parts <- createDataPartition(train_df$retx, times = 1, p = 0.2) # 20 % of training data is used for validation (i.e, hyperparameter selection)
 
 train_control <- trainControl(method = "cv", #Method does not matter as parts dictate 20 % validation of training set
                               index = parts, 
