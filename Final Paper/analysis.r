@@ -124,11 +124,11 @@ build_nn_model_3_layers <- function(selected_train_df, selected_spec) {
   output <- input %>% 
     layer_dense_features(dense_features(selected_spec)) %>% 
     layer_dense(units = 32) %>%
-    layer_batch_normalization() %>% 
     layer_activation(activation = "relu") %>% 
+    layer_batch_normalization() %>% 
     layer_dense(units = 16) %>%
-    layer_batch_normalization() %>% 
     layer_activation(activation = "relu") %>% 
+    layer_batch_normalization() %>% 
     layer_dense(units = 8) 
 
     
@@ -211,7 +211,7 @@ grid_search_nn_model_generaL_optimizer <- function(selected_model, model_train_d
     for (epoch in epochs) {
         for (batch_size in batch_sizes) {
           for (patience in patience_list) {
-            reduce_lr <- callback_reduce_lr_on_plateau(monitor = "val_loss", patience = patience)
+            reduce_lr <- callback_reduce_lr_on_plateau(monitor = "val_loss", patience = patience-3)
             new_early_stop <- callback_early_stopping(monitor = "val_loss", patience = patience)
             new_model <- selected_model %>% 
               compile(
@@ -228,7 +228,7 @@ grid_search_nn_model_generaL_optimizer <- function(selected_model, model_train_d
                 batch_size = batch_size,
                 validation_split = 0.2,
                 verbose = verbose,
-                callbacks = list(print_dot_callback, reduce_lr, new_early_stop) #Print simplified dots, and stop learning when validation improvements stalls
+                callbacks = list(print_dot_callback, reduce_lr) #Print simplified dots, and stop learning when validation improvements stalls
               )
             c(loss, mae) %<-% (new_model %>% evaluate(model_test_df %>% dplyr::select(-retx), model_test_df$retx, verbose = 0))
             if (mae < best_MAE) {
@@ -357,6 +357,7 @@ predictions_1_nn_model[ , 1]
 postResample(predictions_1_nn_model[ , 1], test_df$retx)
 
 save(best_model_nn_1_layer_all, file = "models/1_nn_layer_model_all.Rdata")
+best_model_nn_1_layer_all[[1]]  %>% save_model_tf("models/1_layer_nn_model") # Save model
 
 best_model_nn_3_layers_all <- grid_search_nn_model_generaL_optimizer(nn_model_3_layers, train_df, test_df, 
                                                                     batch_sizes = list(100, 500, 7000),
@@ -372,7 +373,8 @@ predictions_3_nn_model[ , 1]
 postResample(predictions_3_nn_model[ , 1], test_df$retx)
 
 
-save(best_model_nn_3_layers_all, file = "models/3_nn_layer_model_all.Rdata")
+save(best_model_nn_3_layers_all, file = "models/3_nn_layer_model_history.Rdata") # Save model history
+best_model_nn_3_layers_all[[1]]  %>% save_model_tf("models/3_layer_nn_model") # Save model
 
 
 best_model_nn_5_layers_all <- grid_search_nn_model_generaL_optimizer(nn_model_5_layers, train_df, test_df, 
@@ -439,7 +441,7 @@ tunegrid_knn <- expand.grid(k = 5:25)
 
 # Training the KNN model and evaluating with MAE (Mean Average Error)
 knn_model <- caret::train(retx ~ .,
-                   data          = train_df_reduced,
+                   data          = train_df,
                    trControl     = train_control,
                    method        = "knn",
                    metric        = "MAE",                                       # Which metric makes the most sense to use RMSE or MAE. Leaning towards MAE
