@@ -87,6 +87,8 @@ print_dot_callback <- callback_lambda(
   }
 ) 
 
+early_stop <- callback_early_stopping(monitor = "val_loss", patience = 20)
+
 
 
 build_nn_model_5_layers <- function(selected_train_df, selected_spec) {
@@ -116,23 +118,18 @@ build_nn_model_5_layers <- function(selected_train_df, selected_spec) {
 
 
 
-build_nn_model_3_layers <- function(selected_train_df, selected_spec, batch_normalization, dropout_rate) {
+build_nn_model_3_layers <- function(selected_train_df, selected_spec) {
   input <- layer_input_from_dataset(selected_train_df %>% dplyr::select(-retx))
   
   output <- input %>% 
     layer_dense_features(dense_features(selected_spec)) %>% 
-    layer_dense(units = 32, activation = "relu") %>%
-    layer_dropout(dropout_rate)
-  
-    if (batch_normalization) output %<>% layer_batch_normalization()
-  
-    output  %<>% 
-      layer_dense(units = 16, activation = "relu") %>%
-      layer_dropout(dropout_rate)
-    
-    if (batch_normalization) output %<>% layer_batch_normalization() 
-    output %<>% 
-      layer_dense(units = 8) 
+    layer_dense(units = 100, activation = "relu") %>%
+    layer_dropout(0.3) %>%
+    #layer_batch_normalization() %>%
+    layer_dense(units = 100, activation = "relu") %>%
+    layer_dropout(0.3) %>%
+    #layer_batch_normalization() %>%
+    layer_dense(units = 50) 
 
     
   
@@ -174,47 +171,67 @@ build_nn_model_1_layer <- function(selected_train_df, selected_spec) {
 }
 
 
-build_model <- function(selected_train_df, selected_spec, num_layers, batch_normalization, dropout_rate) {
-  if (num_layers == 1) {
-    output_model = build_nn_model_1_layer(selected_train_df, selected_spec, batch_normalization, dropout_rate)
-    
-  }
-  
-  else if (num_layers == 3) {
-    output_model = build_nn_model_3_layers(selected_train_df, selected_spec, batch_normalization, dropout_rate)
-   
-  }
-  else if (num_layers == 5) {
-    output_model = build_nn_model_5_layers(selected_train_df, selected_spec, batch_normalization, dropout_rate)
-    
-  }
-  return (output_model)
-}
 
 
 
-
-
-
-grid_search_nn_model_generaL_optimizer <- function(model_train_df, dropout_rates, num_layers, 
-                                                   epochs, batch_sizes, optimizer, patience_list,  verbose) {
-  
-  selected_spec <- feature_spec(model_train_df, retx ~ . ) %>% 
-    step_numeric_column(all_numeric(), -costat, normalizer_fn = scaler_standard()) %>% # Scale numeric features
-    step_categorical_column_with_vocabulary_list(costat) %>%  # non-numeric variables
-    fit()
-  
+grid_search_nn_model <- function(selected_model, model_train_df, model_test_df, learning_rates, momentums,
+                                 epochs, batch_sizes, 
+                                 patience_list, verbose) {
   
   best_MAE <- Inf
   best_model <- NA
   best_history <- NA
-  batch_normalizations <- list(T, F)
-  for (dropout_rate in dropout_rates) {
-    for (batch_normalization in batch_normalizations) {
+  for (lr in learning_rates) {
+    for (momentum in momentums) {
+      for (epoch in epochs) {
+        for (batch_size in batch_sizes) {
+          for (patience in patience_list) {
+              new_early_stop <- callback_early_stopping(monitor = "val_loss", patience = patience)
+              new_model <- selected_model %>% 
+                compile(
+                  loss = "mse", 
+                  optimizer = optimizer_sgd(
+                    learning_rate =lr,
+                    momentum = momentum),
+                  metrics = list("mean_absolute_error"))
+              
+              
+              history <- new_model %>% 
+                    fit(
+                    x = model_train_df %>% dplyr::select(-retx),
+                    y = model_train_df$retx,
+                    epochs = epoch,
+                    batch_size = batch_size,
+                    validation_split = 0.2,
+                    verbose = verbose,
+                    callbacks = list(print_dot_callback, early_stop) #Print simplified dots, and stop learning when validation improvements stalls
+                )
+            c(loss, mae) %<-% (new_model %>% evaluate(model_test_df %>% dplyr::select(-retx), model_test_df$retx, verbose = 0))
+            if (mae < best_MAE) {
+              best_history <- history
+              best_model <- new_model
+              best_MAE <- mae
+            }
+          }
+       }
+      }
+    }
+  }
+  return (list(best_model, best_history))
+
+}
+
+
+grid_search_nn_model_generaL_optimizer <- function(selected_model, model_train_df,
+                                                   epochs, batch_sizes, optimizer, patience_list,  verbose) {
+  
+  best_MAE <- Inf
+  best_model <- NA
+  best_history <- NA
+  for (epoch in epochs) {
     for (batch_size in batch_sizes) {
       for (patience in patience_list) {
-        selected_model = build_model(model_train_df, selected_spec, num_layers, batch_normalization, dropout_rate)
-        
+        print(paste(">Batch size", batch_size))
         reduce_lr = callback_reduce_lr_on_plateau(monitor = "val_loss", patience = patience)
         new_early_stop = callback_early_stopping(monitor = "val_loss", patience = patience + 10)
         
@@ -229,7 +246,7 @@ grid_search_nn_model_generaL_optimizer <- function(model_train_df, dropout_rates
           fit(
             x = model_train_df %>% dplyr::select(-retx),
             y = model_train_df$retx,
-            epochs = epochs,
+            epochs = epoch,
             batch_size = batch_size,
             validation_split = 0.2,
             verbose = verbose,
@@ -238,19 +255,16 @@ grid_search_nn_model_generaL_optimizer <- function(model_train_df, dropout_rates
         mae_list_length =  new_history$metrics$val_mean_absolute_error %>% length()
         new_mae =  new_history$metrics$val_mean_absolute_error[[mae_list_length]]
         print(paste("> MAE of new model", new_mae))
+        #print(paste(">MAE of new model", new_mae))
+        #print(paste(">val MAE history", new_history$metrics$val_mean_absolute_error ))
         if (new_mae < best_MAE) {
           best_history <- new_history
           best_model <- new_model
           best_MAE <- new_mae
           print(paste(">New best model. MAE of new model", best_MAE))
-          print(paste(">Batch size", batch_size))
-          print(paste(">dropout_rate", dropout_rate))
-          print(paste("> Patience", patience))
-          print(paste(">Batch normalization", batch_normalization))
         }
       }
       
-     }
     }
   }
   return (list(best_model, best_history))
@@ -304,7 +318,7 @@ best_model_nn_1_layer_test <- grid_search_nn_model_generaL_optimizer(nn_model_1_
 
 
 
-predictions_1_nn_model <- best_model_nn_1_layer_test[[1]] %>% predict(test_df_reduced %>% dplyr::select(-retx, -permno))
+predictions_1_nn_model <- best_model_nn_1_layer_test[[1]] %>% predict(test_df_reduced %>% dplyr::select(-retx))
 predictions_1_nn_model[ , 1]
 
 postResample(predictions_1_nn_model[ , 1], test_df_reduced$retx)
@@ -325,7 +339,7 @@ best_model_nn_2_layer_test <- grid_search_nn_model_generaL_optimizer(nn_model_2_
 
 
 
-predictions_2_nn_model <- best_model_nn_2_layers_test[[1]] %>% predict(test_df_reduced %>% dplyr::select(-retx, -permno))
+predictions_2_nn_model <- best_model_nn_2_layers_test[[1]] %>% predict(test_df_reduced %>% dplyr::select(-retx))
 predictions_2_nn_model[ , 1]
 
 postResample(predictions_1_nn_model[ , 1], test_df_reduced$retx)
@@ -335,19 +349,17 @@ postResample(predictions_1_nn_model[ , 1], test_df_reduced$retx)
 
 ## Three layer
 
-best_model_nn_3_layer_test <- grid_search_nn_model_generaL_optimizer(train_df_reduced, 
-                                                                     dropout_rates = list(0, 0.1, 0.3, 0.4),
-                                                                     num_layers = 3,
+best_model_nn_3_layer_test <- grid_search_nn_model_generaL_optimizer(nn_model_3_layers_reduced, train_df_reduced, 
                                                                      batch_sizes = list(500, 1000, 7000),
-                                                                     epochs = 200,
+                                                                     epochs = list(200),
                                                                      optimizer = sgd_opt,
-                                                                     patience_list = list(1, 2, 5, 20,25, 40, 50),
+                                                                     patience_list = list(5, 20,25, 40, 50),
                                                                      verbose = 0
                                                                      
 )
 
 
-predictions_3_nn_model <- best_model_nn_3_layer_test[[1]] %>% predict(test_df_reduced %>% dplyr::select(-retx, -permno))
+predictions_3_nn_model <- best_model_nn_3_layer_test[[1]] %>% predict(test_df_reduced %>% dplyr::select(-retx))
 predictions_3_nn_model[ , 1]
 
 postResample(predictions_3_nn_model[ , 1], test_df_reduced$retx)
@@ -558,17 +570,16 @@ tunegrid_gam <-  expand.grid(method = c("GCV", "REML"),
 
 
 # Training the GAM-model
-gam_model <- caret::train(retx ~ ., 
+gam_model <- train(retx ~ ., 
                    data       = train_df, 
                    preProcess = c("center", "scale"),
                    trControl  = train_control, 
-                   tuneLength   = 10,
+                   tunegrid   = tunegrid_gam,
                    metric     = "MAE",
                    method     = "gam")
 
 
-gam_preds <- predict(gam_model, test_df)
-postResample(gam_preds, test_df$retx)
+
 
 
 
@@ -581,18 +592,18 @@ tunegrid_gbm <-  expand.grid(interaction.depth = c(1, 5, 9),
 
 # Training the GBM-model
 gbm_model <- caret::train(retx ~ .,
-                   data       = train_df,
+                   data       = train_df_reduced %>% mutate(costat = as.factor(costat)),
                    method     = "gbm",
                    preProcess = c("center","scale"),
                    metric     = "MAE",                                             
                    tuneLength   = 10,
                    trControl  = train_control)
 
-gbm_preds <- predict(gbm_model, test_df)
-postResample(gbm_preds, test_df$retx)
+gbm_preds <- predict(gbm_model, test_df_reduced)
+postResample(gbm_preds, test_df_reduced$retx)
 
 # Saving the models ------------------------------------------------------------
-save(knn_model, bayesian_ridge_model, gam_model,gbm_model, file = "models/models.Rdata")
+save(knn_model, bayesian_ridge_model,file = "models/models.Rdata")
 
 
 
