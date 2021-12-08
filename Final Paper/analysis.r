@@ -125,10 +125,10 @@ build_nn_model_3_layers <- function(selected_train_df, selected_spec) {
     layer_dense_features(dense_features(selected_spec)) %>% 
     layer_dense(units = 100, activation = "relu") %>%
     layer_dropout(0.3) %>%
-    layer_batch_normalization() %>%
+    #layer_batch_normalization() %>%
     layer_dense(units = 100, activation = "relu") %>%
     layer_dropout(0.3) %>%
-    layer_batch_normalization() %>%
+    #layer_batch_normalization() %>%
     layer_dense(units = 50) 
 
     
@@ -137,6 +137,25 @@ build_nn_model_3_layers <- function(selected_train_df, selected_spec) {
   return(model)
   
 }
+
+build_nn_model_2_layers <- function(selected_train_df, selected_spec) {
+  input <- layer_input_from_dataset(selected_train_df %>% dplyr::select(-retx))
+  
+  output <- input %>% 
+    layer_dense_features(dense_features(selected_spec)) %>% 
+    layer_dense(units = 32, activation = "relu") %>%
+    layer_dropout(0.2) %>%
+    layer_batch_normalization() %>%
+    layer_dense(units = 16)
+  
+  
+  
+  model <- keras_model(input, output)
+  return(model)
+  
+}
+
+
 
 
 build_nn_model_1_layer <- function(selected_train_df, selected_spec) {
@@ -203,7 +222,7 @@ grid_search_nn_model <- function(selected_model, model_train_df, model_test_df, 
 }
 
 
-grid_search_nn_model_generaL_optimizer <- function(selected_model, model_train_df, model_test_df,
+grid_search_nn_model_generaL_optimizer <- function(selected_model, model_train_df,
                                                    epochs, batch_sizes, optimizer, patience_list,  verbose) {
   
   best_MAE <- Inf
@@ -212,16 +231,18 @@ grid_search_nn_model_generaL_optimizer <- function(selected_model, model_train_d
   for (epoch in epochs) {
     for (batch_size in batch_sizes) {
       for (patience in patience_list) {
-        reduce_lr <- callback_reduce_lr_on_plateau(monitor = "val_loss", patience = patience)
-        new_early_stop <- callback_early_stopping(monitor = "val_loss", patience = patience)
-        new_model <- selected_model %>% 
+        print(paste(">Batch size", batch_size))
+        reduce_lr = callback_reduce_lr_on_plateau(monitor = "val_loss", patience = patience)
+        new_early_stop = callback_early_stopping(monitor = "val_loss", patience = patience + 10)
+        
+        new_model = selected_model %>% 
           compile(
             loss = "mse", 
             optimizer = optimizer,
             metrics = list("mean_absolute_error"))
         
         
-        history <- new_model %>% 
+        new_history = new_model %>% 
           fit(
             x = model_train_df %>% dplyr::select(-retx),
             y = model_train_df$retx,
@@ -231,11 +252,16 @@ grid_search_nn_model_generaL_optimizer <- function(selected_model, model_train_d
             verbose = verbose,
             callbacks = list(print_dot_callback, reduce_lr, new_early_stop) #Print simplified dots, and stop learning when validation improvements stalls
           )
-        c(loss, mae) %<-% (new_model %>% evaluate(model_test_df %>% dplyr::select(-retx), model_test_df$retx, verbose = 0))
-        if (mae < best_MAE) {
-          best_history <- history
+        mae_list_length =  new_history$metrics$val_mean_absolute_error %>% length()
+        new_mae =  new_history$metrics$val_mean_absolute_error[[mae_list_length]]
+        print(paste("> MAE of new model", new_mae))
+        #print(paste(">MAE of new model", new_mae))
+        #print(paste(">val MAE history", new_history$metrics$val_mean_absolute_error ))
+        if (new_mae < best_MAE) {
+          best_history <- new_history
           best_model <- new_model
-          best_MAE <- mae
+          best_MAE <- new_mae
+          print(paste(">New best model. MAE of new model", best_MAE))
         }
       }
       
@@ -249,12 +275,14 @@ grid_search_nn_model_generaL_optimizer <- function(selected_model, model_train_d
 
 
 nn_model_1_layer_reduced <- build_nn_model_1_layer(train_df_reduced, spec_reduced)
+nn_model_2_layers_reduced        <- build_nn_model_2_layers(train_df_reduced, spec_reduced)
 nn_model_3_layers_reduced <- build_nn_model_3_layers(train_df_reduced, spec_reduced)
 nn_model_5_layers_reduced <- build_nn_model_5_layers(train_df_reduced, spec_reduced)
 
 
 
 nn_model_1_layer <- build_nn_model_1_layer(train_df, spec)
+nn_model_2_layers <- build_nn_model_2_layers(train_df, spec)
 nn_model_3_layers <- build_nn_model_3_layers(train_df, spec)
 nn_model_5_layers <- build_nn_model_5_layers(train_df, spec)
 
@@ -271,6 +299,7 @@ load("models/3_nn_layer_model_history.Rdata")
 ### ADAM optimizer
 
 adam_opt = optimizer_adam()
+sgd_opt = optimizer_sgd(learning_rate = 0.8)
 
 
 
@@ -278,11 +307,11 @@ adam_opt = optimizer_adam()
 
 ## Single layer
 
-best_model_nn_1_layer_test <- grid_search_nn_model_generaL_optimizer(nn_model_1_layer_reduced, train_df_reduced, test_df_reduced, 
+best_model_nn_1_layer_test <- grid_search_nn_model_generaL_optimizer(nn_model_1_layer_reduced, train_df_reduced, 
                                                                      batch_sizes = list(100, 500, 1000, 7000),
                                                                      epochs = list(200),
                                                                      optimizer = adam_opt,
-                                                                     patience_list = list(20,25, 40, 50),
+                                                                     patience_list = list(1, 2, 5, 7, 10, 20,25, 40, 50),
                                                                      verbose = 0
                                                                      
 )
@@ -295,14 +324,36 @@ predictions_1_nn_model[ , 1]
 postResample(predictions_1_nn_model[ , 1], test_df_reduced$retx)
 
 
+# Two layers
 
-## Three layer
+## Single layer
 
-best_model_nn_3_layer_test <- grid_search_nn_model_generaL_optimizer(nn_model_3_layers_reduced, train_df_reduced, test_df_reduced, 
+best_model_nn_2_layer_test <- grid_search_nn_model_generaL_optimizer(nn_model_2_layers_reduced, train_df_reduced, 
                                                                      batch_sizes = list(100, 500, 1000, 7000),
                                                                      epochs = list(200),
                                                                      optimizer = adam_opt,
-                                                                     patience_list = list(20,25, 40, 50),
+                                                                     patience_list = list(1, 2, 5, 7, 10, 20,25, 40, 50),
+                                                                     verbose = 0
+                                                                     
+)
+
+
+
+predictions_2_nn_model <- best_model_nn_2_layers_test[[1]] %>% predict(test_df_reduced %>% dplyr::select(-retx))
+predictions_2_nn_model[ , 1]
+
+postResample(predictions_1_nn_model[ , 1], test_df_reduced$retx)
+
+
+
+
+## Three layer
+
+best_model_nn_3_layer_test <- grid_search_nn_model_generaL_optimizer(nn_model_3_layers_reduced, train_df_reduced, 
+                                                                     batch_sizes = list(500, 1000, 7000),
+                                                                     epochs = list(200),
+                                                                     optimizer = sgd_opt,
+                                                                     patience_list = list(5, 20,25, 40, 50),
                                                                      verbose = 0
                                                                      
 )
@@ -317,11 +368,11 @@ postResample(predictions_3_nn_model[ , 1], test_df_reduced$retx)
 
 ## Five layer
 
-best_model_nn_5_layer_test <- grid_search_nn_model_generaL_optimizer(nn_model_5_layers_reduced, train_df_reduced, test_df_reduced, 
-                                                                     batch_sizes = list(100, 500, 1000, 7000),
+best_model_nn_5_layer_test <- grid_search_nn_model_generaL_optimizer(nn_model_5_layers_reduced, train_df_reduced, 
+                                                                     batch_sizes = list(500, 1000, 7000),
                                                                      epochs = list(200),
-                                                                     optimizer = adam_opt,
-                                                                     patience_list = list(20,25, 40, 50),
+                                                                     optimizer = sgd_opt,
+                                                                     patience_list = list(5, 20,25, 40, 50),
                                                                      verbose = 0
                                                                      
 )
@@ -345,11 +396,11 @@ make_0_benchmark(test_df_reduced)
 
 
 
-best_model_nn_1_layer_all <- grid_search_nn_model_generaL_optimizer(nn_model_1_layer, train_df, test_df, 
-                                                                    batch_sizes = list(100, 500, 7000),
+best_model_nn_1_layer_all <- grid_search_nn_model_generaL_optimizer(nn_model_1_layer, train_df, 
+                                                                    batch_sizes = list(100, 300, 500, 7000),
                                                                     epochs = list(200),
                                                                     optimizer = adam_opt,
-                                                                    patience_list = list(5, 15, 25, 50),
+                                                                    patience_list = list(1, 5, 15, 25, 50),
                                                                     verbose = 0
                                                                     
 )
@@ -364,8 +415,23 @@ postResample(predictions_1_nn_model[ , 1], test_df$retx)
 #best_model_nn_1_layer_all[[1]]  %>% save_model_tf("models/1_layer_nn_model") # Save model
 
 
+## two layers
 
-best_model_nn_3_layers_all <- grid_search_nn_model_generaL_optimizer(nn_model_3_layers, train_df, test_df, 
+
+best_model_nn_2_layer_all <- grid_search_nn_model_generaL_optimizer(nn_model_2_layers, train_df, 
+                                                                    batch_sizes = list(100, 300, 500, 7000),
+                                                                    epochs = list(200),
+                                                                    optimizer = adam_opt,
+                                                                    patience_list = list(1, 5, 15, 25, 50),
+                                                                    verbose = 0
+                                                                    
+)
+
+
+
+
+
+best_model_nn_3_layers_all <- grid_search_nn_model_generaL_optimizer(nn_model_3_layers, train_df, 
                                                                     batch_sizes = list(100, 500, 1000, 7000),
                                                                     epochs = list(200),
                                                                     optimizer = adam_opt,
@@ -383,7 +449,7 @@ save(best_model_nn_3_layers_all, file = "models/3_nn_layer_model_history.Rdata")
 best_model_nn_3_layers_all[[1]]  %>% save_model_tf("models/3_layer_nn_model") # Save model
 
 
-best_model_nn_5_layers_all <- grid_search_nn_model_generaL_optimizer(nn_model_5_layers, train_df, test_df, 
+best_model_nn_5_layers_all <- grid_search_nn_model_generaL_optimizer(nn_model_5_layers, train_df, 
                                                                      batch_sizes = list(100, 500, 7000),
                                                                      epochs = list(200),
                                                                      optimizer = adam_opt,
