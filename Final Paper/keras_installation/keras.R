@@ -8,6 +8,7 @@ conda_list()
 conda_python(envname = "r-reticulate")    
 conda_install(envname = "r-reticulate",packages="r-reticulate")
 conda_install(envname = "r-reticulate",packages="r-tensorflow")
+conda_install(envname = "r-reticulate",packages="r-tfdatasets")
 conda_install(envname = "r-reticulate",packages="r-keras")
 
 
