@@ -45,18 +45,27 @@ tensorflow::use_condaenv("r-reticulate") # Specify enviroment to tensorflow
 
 
 
-################################################################################
-########################## Train and Test Split ################################
-################################################################################
-
 ######### Dataframe with all companies using only variance and correlation filter#############
 # Load all 
 load(file = "cached_data/train_test.Rdata")
 # Or run the code in preprocessing
 
 
+##### Scale numeric features ####
 
-#load("models/3_nn_layer_model_history.Rdata")
+train_df_scaled <- train_df %>% dplyr::select(-costat) %>% 
+  scale_py() %>% 
+  as_tibble() %>% 
+  mutate(costat = train_df$costat) %>% 
+  mutate(retx = train_df$retx) # Add in retx without scaling 
+
+
+test_df_scaled <- test_df %>% dplyr::select(-costat) %>% 
+  scale_py() %>% 
+  as_tibble() %>% 
+  mutate(costat = test_df$costat) %>% 
+  mutate(retx = test_df$retx) # Add in retx without scaling
+
 
 
 
@@ -66,7 +75,22 @@ load(file = "cached_data/train_test.Rdata")
 ################################################################################
 
 # In order to save run time one can choose to load the model results
-#load(file = "models/models.Rdata")
+load(file = "models/models.Rdata")
+
+
+
+load_models <- function() {
+  
+  load(file = "models/models.Rdata") # Load knn, gbm, ridge regression
+  ## Load NN models
+  
+  load(file = "models/1_nn_layer_model_history.Rdata")
+  best_model_nn_1_layer_all <- list( load_model_hdf5("models/1_layer_nn_model.hdf5"), load(file = "models/1_nn_layer_model_history.Rdata"))
+  load(file = "models/2_nn_layer_model_all.Rdata")
+  best_model_nn_2_layer_all <- load_model_hdf5("models/2_layer_nn_model.hdf5")
+ 
+  
+}
 
 
 
@@ -80,7 +104,6 @@ make_0_benchmark <- function(selected_test_df) {
   return (benchmark_0)
   
 }
-
 
 
 
@@ -125,8 +148,11 @@ build_nn_model_5_layers <- function(selected_train_df, selected_spec, batch_norm
   if (batch_normalization == T) {output %<>% layer_batch_normalization()}
   output  %<>% 
     layer_dense(units = 4, activation = "relu") %>%
-    layer_dropout(dropout_rate) %>% 
-    layer_dense(units = 2) 
+    layer_dropout(dropout_rate) 
+  
+  if (batch_normalization == T) {output %<>% layer_batch_normalization()}
+  
+  output %<>%   layer_dense(units = 2) 
   
   
   
@@ -151,12 +177,14 @@ build_nn_model_4_layers <- function(selected_train_df, selected_spec, batch_norm
     layer_dropout(dropout_rate)
   
   
-  
   if (batch_normalization == T) {output %<>% layer_batch_normalization()}
   output  %<>% 
     layer_dense(units = 8, activation = "relu") %>%
-    layer_dropout(dropout_rate) %>% 
-    layer_dense(units = 4) 
+    layer_dropout(dropout_rate)
+  
+  if (batch_normalization == T) {output %<>% layer_batch_normalization()}
+    
+  output %<>% layer_dense(units = 4) 
   
   
   
@@ -314,6 +342,7 @@ grid_search_nn_model_generaL_optimizer <- function(model_train_df, dropout_rates
                 batch_size = batch_size,
                 validation_split = 0.2,
                 verbose = verbose,
+                use_multiprocessing = T, 
                 callbacks = list(reduce_lr, new_early_stop) #Print simplified dots, and stop learning when validation improvements stalls
               )
             mae_list_length =  new_history$metrics$val_mean_absolute_error %>% length()
@@ -347,16 +376,18 @@ grid_search_nn_model_generaL_optimizer <- function(model_train_df, dropout_rates
 ############################## TESTING #################################
 
 
-train_df_reduced_scaled <- train_df_reduced %>% dplyr::select(-costat) %>% 
+train_df_reduced_scaled <- train_df_reduced %>% dplyr::select(-costat, -retx) %>% 
   scale_py() %>% 
   as_tibble() %>% 
-  mutate(costat = train_df_reduced$costat)
+  mutate(costat = train_df_reduced$costat) %>% 
+  mutate(retx = train_df_reduced$retx)
 
 
 test_df_reduced_scaled <- test_df_reduced %>% dplyr::select(-costat) %>% 
   scale_py() %>% 
   as_tibble() %>% 
-  mutate(costat = test_df_reduced$costat)
+  mutate(costat = test_df_reduced$costat) %>% 
+  mutate(retx = train_df_reduced$retx)
 
 ## Single layer
 
@@ -487,10 +518,7 @@ test <- load_model_hdf5("test_model.h5")
 make_0_benchmark(test_df) 
 
 
-train_df_scaled <- train_df %>% dplyr::select(-costat) %>% 
-  scale_py() %>% 
-  as_tibble() %>% 
-  mutate(costat = train_df$costat)
+
 
 
 #### RUN ON entire dataset
@@ -513,7 +541,7 @@ best_model_nn_1_layer_all  <- grid_search_nn_model_generaL_optimizer(train_df_sc
 
 
 
-best_model_nn_2_layer_all <-  grid_search_nn_model_generaL_optimizer(train_df_scaled, 
+best_model_nn_2_layers_all <-  grid_search_nn_model_generaL_optimizer(train_df_scaled, 
                                                                        dropout_rates = list(0, 0.25, 0.4),
                                                                        num_layers = 2,
                                                                        batch_sizes = list(500, 1000, 7000),
@@ -566,71 +594,70 @@ best_model_nn_5_layers_all <- grid_search_nn_model_generaL_optimizer(train_df_sc
 
 
 
-### Load models
 
 
-load(file = "models/1_nn_layer_model_all.Rdata")
-load_model_hdf5("models/1_layer_nn_model.hdf5", custom_objects = dict("normalizer_fn"=normalizer_fn))
-load_model_tf("models/1_layer_nn_model")
-## 1 layer preds
 
-predictions_1_nn_model <- best_model_nn_1_layer_all[[1]] %>% predict(test_df %>% dplyr::select(-retx))
+############## Model predictions
+
+## 1 NN
+
+
+predictions_1_nn_model <- best_model_nn_1_layer_all[[1]] %>% predict(test_df_scaled %>% dplyr::select(-retx))
 predictions_1_nn_model[ , 1]
 
 postResample(predictions_1_nn_model[ , 1], test_df$retx)
 
-## Do not save unless certain
-save(best_model_nn_1_layer_all, file = "models/1_nn_layer_model_all.Rdata") # Save model history
-best_model_nn_1_layer_all[[1]]  %>% save_model_hdf5("models/1_layer_nn_model.hdf5") # Save model
 
-best_model_nn_1_layer_all[[1]]  %>% save_model_tf("models/1_layer_nn_model") # Save model
-
-
-## 2 layer preds
-
-predictions_2_nn_model <- best_model_nn_2_layer_all[[1]] %>% predict(test_df %>% dplyr::select(-retx, -permno))
+## 2 NN
+predictions_2_nn_model <- best_model_nn_2_layers_all[[1]] %>% predict(test_df_scaled %>% dplyr::select(-retx, -permno))
 predictions_2_nn_model[ , 1]
 
 postResample(predictions_2_nn_model[ , 1], test_df$retx)
 
-
-## 3 layer preds
-
-predictions_3_nn_model <- best_model_nn_3_layers_all[[1]] %>% predict(test_df %>% dplyr::select(-retx))
+## 3 NN
+predictions_3_nn_model <- best_model_nn_3_layers_all[[1]] %>% predict(test_df_scaled %>% dplyr::select(-retx, -permno))
 predictions_3_nn_model[ , 1]
 
 postResample(predictions_3_nn_model[ , 1], test_df$retx)
 
 
+## 4 NN
+predictions_4_nn_model <- best_model_nn_4_layers_all[[1]] %>% predict(test_df_scaled %>% dplyr::select(-retx, -permno))
+predictions_4_nn_model[ , 1]
+
+postResample(predictions_4_nn_model[ , 1], test_df$retx)
+
+
+################# Saving models #########################
+
+## 1 NN
+
+best_model_nn_1_layer_history <- best_model_nn_1_layer_all[[2]]
+save(best_model_nn_1_layer_history, file = "models/1_nn_layer_model_history.Rdata") # Save model history
+best_model_nn_1_layer_all[[1]]  %>% save_model_hdf5("models/1_layer_nn_model.hdf5") # Save model
+
+## 2 NN
+
+best_model_nn_2_layers_history <- best_model_nn_2_layers_all[[2]]
+save(best_model_nn_2_layers_history, file = "models/2_nn_layer_model_history.Rdata") # Save model history
+best_model_nn_2_layer_all[[1]]  %>% save_model_hdf5("models/2_layer_nn_model.hdf5") # Save model
+
+
+## 3 NN
+
 save(best_model_nn_3_layers_all, file = "models/3_nn_layer_model_history.Rdata") # Save model history
-best_model_nn_3_layers_all[[1]]  %>% save_model_tf("models/3_layer_nn_model") # Save model
+best_model_nn_3_layers_all[[1]]  %>% save_model_hdf5("models/3_layer_nn_model.hdf5") # Save model
 
 
+## 4 NN
 
-## 5 layer preds 
-
-
-
-predictions_5_nn_model <- best_model_nn_5_layers_all[[1]] %>% predict(test_df %>% dplyr::select(-retx))
-predictions_5_nn_model[ , 1]
-
-postResample(predictions_5_nn_model[ , 1], test_df$retx)
-
-
-
-save(best_model_nn_5_layers_all, file = "models/5_nn_layer_model_all.Rdata")
+save(best_model_nn_4_layers_all, file = "models/4_nn_layer_model_history.Rdata") # Save model history
+best_model_nn_4_layers_all[[1]]  %>% save_model_hdf5("models/4_layer_nn_model.hdf5") # Save model
 
 
 
 
 
-
-## Save models
-
-best_model_nn_3_layer_adam[[1]]  %>% save_model_tf("models/3_layer_nn_model")
-best_model_nn_3_layer_adam[[2]]  %>% save_model_hdf5("models/3_layer_nn_model")
-
-save(best_model_nn_3_layer_adam, file = "models/3_nn_layer_model_history.Rdata")
 
 
 
@@ -667,12 +694,11 @@ tunegrid_knn <- expand.grid(k = 5:25)
 
 # Training the KNN model and evaluating with MAE (Mean Average Error)
 knn_model <- caret::train(retx ~ .,
-                   data          = train_df,
+                   data          = train_df_scaled,
                    trControl     = train_control,
                    method        = "knn",
                    metric        = "MAE",                             
                    tuneLength      = 10,
-                   preProcess    = c("center", "scale"),
                    allowParalell = TRUE)
 
 
@@ -698,8 +724,7 @@ summary(knn_model)
 # Bayesian ridge regression ----------------------------------------------------
 # Training the Ridge-model
 bayesian_ridge_model <- caret::train(retx ~ ., 
-                              data       = train_df, 
-                              preProcess = c("center", "scale"),
+                              data       = train_df_scaled, 
                               trControl  = train_control, 
                               tuneLength = 10,
                               metric     = "MAE",
@@ -714,10 +739,14 @@ bayesian_ridge_model
 bayesian_ridge_model$results$MAE %>% min() # Validation accuracy
 
 
-
+bayesian_ridge_preds <- predict(bayesian_ridge_model, test_df_scaled)
+postResample(bayesian_ridge_preds, test_df$retx)
 
 
 # Generalized additive model ---------------------------------------------------
+
+
+#### NOT USED ###
 # Tune grid of GAM-model
 tunegrid_gam <-  expand.grid(method = c("GCV", "REML"),
                              select = list(T, F))
@@ -725,15 +754,14 @@ tunegrid_gam <-  expand.grid(method = c("GCV", "REML"),
 
 # Training the GAM-model
 gam_model <- caret::train(retx ~ ., 
-                   data       = train_df, 
-                   preProcess = c("center", "scale"),
+                   data       = train_df_scaled, 
                    trControl  = train_control, 
                    tuneLength   = 10,
                    metric     = "MAE",
                    method     = "gam")
 
 
-gam_preds <- predict(gam_model, test_df)
+gam_preds <- predict(gam_model, test_df_scaled)
 postResample(gam_preds, test_df$retx)
 
 
@@ -747,18 +775,17 @@ tunegrid_gbm <-  expand.grid(interaction.depth = c(1, 5, 9),
 
 # Training the GBM-model
 gbm_model <- caret::train(retx ~ .,
-                   data       = train_df,
+                   data       = train_df_scaled,
                    method     = "gbm",
-                   preProcess = c("center","scale"),
                    metric     = "MAE",                                             
                    tuneLength   = 10,
                    trControl  = train_control)
 
-gbm_preds <- predict(gbm_model, test_df)
+gbm_preds <- predict(gbm_model, test_df_scaled)
 postResample(gbm_preds, test_df$retx)
 
 # Saving the models ------------------------------------------------------------
-save(knn_model, bayesian_ridge_model, gam_model,gbm_model, file = "models/models.Rdata")
+save(knn_model, bayesian_ridge_model,gbm_model, file = "models/models.Rdata")
 
 
 
@@ -785,11 +812,23 @@ evaluate_models <- function(modelList, train_df, test_df) {
   #' #' @param test_df   Passing test data frame
   #' @return          Returns a tibble of train and test metrics
   
+  
+  train_df_reduced_scaled <- train_df_reduced %>% dplyr::select(-costat) %>% 
+    scale_py() %>% 
+    as_tibble() %>% 
+    mutate(costat = train_df_reduced$costat)
+  
+  
+  test_df_reduced_scaled <- test_df_reduced %>% dplyr::select(-costat) %>% 
+    scale_py() %>% 
+    as_tibble() %>% 
+    mutate(costat = test_df_reduced$costat)
+  
   model_performance <- tibble()
   
   for (model in modelList) {
-    test_predictions          <- predict(model, newdata = test_df)
-    train_predictions         <- predict(model, newdata = train_df)
+    test_predictions          <- predict(model, newdata = test_df_reduced_scaled)
+    train_predictions         <- predict(model, newdata = train_df_reduced_scaled)
     test_performance_metrics  <- postResample(pred = test_predictions, 
                                               obs = test_df$retx)
     train_performance_metrics <- postResample(pred = train_predictions, 
@@ -810,9 +849,9 @@ evaluate_models <- function(modelList, train_df, test_df) {
   
 }
 
-modelList <- list(knn_model, multi_hidden_layer_model, nn_model, gam_model, bayesian_ridge_model)   # List of all models
+modelList <- list(knn_model,gbm_model, bayesian_ridge_model)   # List of all models
 "Uncomment to perform model evaluation"
-#model_evaluation <- evaluate_models(modelList, train_df,  test_df)  %>%  arrange(`Test MAE`)
+model_evaluation <- evaluate_models(modelList, train_df,  test_df)  %>%  arrange(`Test MAE`)
 #save(model_evaluation, file = "model_results/model_evalution.Rdata")
 
 load(file = "model_results/model_evalution.Rdata")
@@ -881,7 +920,7 @@ make_0_benchmarK(test_df_reduced ) %>%
 
 
 
-select_stocks <- function(test_df, selected_model) {
+select_stocks <- function(test_df, test_df_scaled, selected_model) {
   
   #' @description:         Function that selects stocks based on predictability
   #'                       with their performance metrics
@@ -896,6 +935,9 @@ select_stocks <- function(test_df, selected_model) {
   company_predictability <- tibble()
   
   for (company in companies) {
+    
+    company_data_scaled <- test_df %>% 
+      filter(permno == company)
     company_data <- test_df %>% 
       filter(permno == company)
     
