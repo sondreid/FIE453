@@ -47,15 +47,6 @@ merged %<>% rename_with(tolower) %>% mutate(date = lubridate::ymd(date))
 
 ######################## DATA PROCESSING FUNCTIONS  ##########################
 
-get_company_name <- function(input_permno) {
-    #'
-    #'@description: Returns the name of a company based on its company identification number
-    company_name <- company_names_df %>% 
-        filter(permno == input_permno) 
-    # If several names are registered. Pick the most recent
-    company_name %<>% arrange(desc(date))
-    return( company_name$comnam[1])
-}
 
 
 
@@ -406,7 +397,7 @@ test_df_reduced %<>% anti_join(low_observation_count_companies)                 
 
 ### SAVE datasets
 
-save(train_df, selection_data, test_df, train_df_reduced, test_df_reduced, file = "cached_data/train_test.Rdata") 
+save(train_df, selection_data, test_df, train_df_reduced, test_df_reduced, company_names_df, feature_names_df, file = "cached_data/train_test.Rdata") 
 
 
 

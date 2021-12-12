@@ -125,6 +125,17 @@ make_0_benchmarK(test_df_reduced ) %>%
 ################################################################################
 
 
+get_company_name <- function(input_permno) {
+  #'
+  #'@description: Returns the name of a company based on its company identification number
+  company_name <- company_names_df %>% 
+    filter(permno == input_permno) 
+  # If several names are registered. Pick the most recent
+  company_name %<>% arrange(desc(date))
+  return( company_name$comnam[1])
+}
+
+
 
 select_stocks <- function(test_df, selected_model) {
   
@@ -160,6 +171,43 @@ select_stocks <- function(test_df, selected_model) {
   return (company_predictability)
   
 }
+
+
+select_stocks_nn <- function(test_df, selected_model) {
+  
+  #' @description:         Function that selects stocks based on predictability
+  #'                       with their performance metrics
+  #' 
+  #' @param test_df        Passing a test data frame 
+  #' @param selected_model Passing a selected model
+  #' @return               Companies with highest predictability
+  
+  companies <- test_df$permno %>% unique()
+  
+  
+  company_predictability <- tibble()
+  
+  for (company in companies) {
+    
+    company_data <- test_df %>% 
+      filter(permno == company)
+    
+    company_predictions <- (selected_model %>% predict(test_df %>% dplyr::select(-retx)))[ , 1]
+    company_performance_metrics <- postResample(pred = company_predictions, 
+                                                obs = company_data$retx)
+    
+    company_predictability %<>% bind_rows(
+      tibble("Company name"       = get_company_name(company_data$permno[1]),
+             "Company identifier" = company_data$permno[1],
+             "Test RMSE"          = company_performance_metrics[[1]],
+             "Test MAE"           = company_performance_metrics[[3]])
+    ) 
+  }
+  
+  return (company_predictability)
+  
+}
+
 
 select_stocks_always_0 <- function(test_df) {
   
@@ -240,9 +288,8 @@ selected_stock_company_info <- function(selected_stocks, test_df,  n) {
   
 }
 
-selected_model <- multi_hidden_layer_model 
 
-selected_stocks <- select_stocks(test_df, selected_model) %>%  arrange(`Test MAE`)
+selected_stocks <- select_stocks_nn(test_df_scaled, best_model_nn_1_layer_all[[1]]) %>%  arrange(`Test MAE`)
 
 
 
@@ -290,6 +337,19 @@ all_companies_summary %>%
   save_kable("images/all_company_summary.png", 
              zoom = 1.5, 
              density = 1900)
+
+
+
+##### Monthly predictions
+
+
+
+predict_monthly_returns <- function(model, company, selection_data) {
+  
+  
+  
+}
+
 
 
 
