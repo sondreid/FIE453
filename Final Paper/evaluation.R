@@ -348,9 +348,9 @@ selected_stock_company_info <- function(selected_stocks, test_df,  n) {
 }
 
 
-always_0_stocks <- select_stocks_always_0(test_df_scaled)
+#always_0_stocks <- select_stocks_always_0(test_df_scaled)
 
-selected_stocks_nn <- stock_level_predictions_nn(test_df_scaled, best_model_nn_1_layer_all[[1]]) %>%  arrange(`Test MAE`)
+#selected_stocks_nn <- stock_level_predictions_nn(test_df_scaled, best_model_nn_1_layer_all[[1]]) %>%  arrange(`Test MAE`)
 
 
 
@@ -427,7 +427,9 @@ caret_models <- list(
   list(bayesian_ridge_model, "Bayesian ridge regression")
 )
 
-model_metrics_stock_level <- mean_metric_stock_level(20, test_df_scaled, nn_models, caret_models) %>% arrange(`MAE top stocks`)
+model_metrics_stock_level <- mean_metric_stock_level(100, test_df_scaled, nn_models, caret_models) %>% arrange(`MAE top stocks`)
+
+save(model_metrics_stock_level, file = "model_results/stock_level_performance.Rdata")
 
 
 model_metrics_stock_level %>% 
@@ -441,6 +443,11 @@ model_metrics_stock_level %>%
 
 
 ### Based on best performing model, which stocks are predictable ###
+
+
+nn_model_3_layer_stock_preds <- stock_level_predictions_nn(test_df_scaled, best_model_nn_3_layers_all[[1]])
+
+
 
 
 

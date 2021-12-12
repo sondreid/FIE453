@@ -98,7 +98,7 @@ test_df_reduced_scaled <- test_df_reduced %>% dplyr::select(-costat,  -retx, -pe
 ################################################################################
 
 # In order to save run time one can choose to load the model results
-load(file = "models/models.Rdata")
+load(file = "models/models.Rdata") 
 
 
 
@@ -108,7 +108,8 @@ load_models <- function() {
   ## Load NN models
   
   load(file = "models/1_nn_layer_model_history.Rdata")
-  best_model_nn_1_layer_all <- list( load_model_hdf5("models/1_layer_nn_model.hdf5"), load(file = "models/1_nn_layer_model_history.Rdata"))
+  best_model_nn_1_layer_all <- list( load_model_hdf5("models/1_layer_nn_model.hdf5"), best_model_nn_1_layer_history)
+  
   load(file = "models/2_nn_layer_model_all.Rdata")
   best_model_nn_2_layer_all <- load_model_hdf5("models/2_layer_nn_model.hdf5")
  
@@ -640,31 +641,36 @@ postResample(predictions_4_nn_model[ , 1], test_df_scaled$retx)
 
 ################# Saving models #########################
 
-## 1 NN
+# Do not save unless certain of validity of results
+save_nn_models <- function() {
+  #' 
+  #' 
+  ## 1 NN
+  
+  
+  best_model_nn_1_layer_history <- best_model_nn_1_layer_all[[2]]
+  save(best_model_nn_1_layer_history, file = "models/1_nn_layer_model_history.Rdata") # Save model history
+  best_model_nn_1_layer_all[[1]]  %>% save_model_hdf5("models/1_layer_nn_model.hdf5") # Save model
+  
+  ## 2 NN
+  
+  best_model_nn_2_layers_history <- best_model_nn_2_layers_all[[2]]
+  save(best_model_nn_2_layers_history, file = "models/2_nn_layers_model_history.Rdata") # Save model history
+  best_model_nn_2_layers_all[[1]]  %>% save_model_hdf5("models/2_layer_nn_model.hdf5") # Save model
+  
+  
+  ## 3 NN
+  best_model_nn_3_layers_history <- best_model_nn_3_layers_all[[2]]
+  save(best_model_nn_3_layers_history, file = "models/3_nn_layers_model_history.Rdata") # Save model history
+  best_model_nn_3_layers_all[[1]]  %>% save_model_hdf5("models/3_layer_nn_model.hdf5") # Save model
+  
+  
+  ## 4 NN
+  best_model_nn_4_layers_history <- best_model_nn_4_layers_all[[2]]
+  save(best_model_nn_4_layers_history, file = "models/4_nn_layer_model_history.Rdata") # Save model history
+  best_model_nn_4_layers_all[[1]]  %>% save_model_hdf5("models/4_layers_nn_model.hdf5") # Save model
 
-best_model_nn_1_layer_history <- best_model_nn_1_layer_all[[2]]
-save(best_model_nn_1_layer_history, file = "models/1_nn_layer_model_history.Rdata") # Save model history
-best_model_nn_1_layer_all[[1]]  %>% save_model_hdf5("models/1_layer_nn_model.hdf5") # Save model
-
-## 2 NN
-
-best_model_nn_2_layers_history <- best_model_nn_2_layers_all[[2]]
-save(best_model_nn_2_layers_history, file = "models/2_nn_layers_model_history.Rdata") # Save model history
-best_model_nn_2_layers_all[[1]]  %>% save_model_hdf5("models/2_layer_nn_model.hdf5") # Save model
-
-
-## 3 NN
-best_model_nn_3_layers_history <- best_model_nn_3_layers_all[[2]]
-save(best_model_nn_3_layers_history, file = "models/3_nn_layers_model_history.Rdata") # Save model history
-best_model_nn_3_layers_all[[1]]  %>% save_model_hdf5("models/3_layer_nn_model.hdf5") # Save model
-
-
-## 4 NN
-best_model_nn_4_layers_history <- best_model_nn_4_layers_all[[2]]
-save(best_model_nn_4_layers_history, file = "models/4_nn_layer_model_history.Rdata") # Save model history
-best_model_nn_4_layers_all[[1]]  %>% save_model_hdf5("models/4_layers_nn_model.hdf5") # Save model
-
-
+}
 
 
 
@@ -719,8 +725,8 @@ knn_model
 knn_model$results$MAE %>% min() # Validation accuracy
 
 
-# Summary of KNN-model
-summary(knn_model)
+knn_preds <- predict(knn_model, test_df_scaled)
+postResample(knn_preds, test_df_scaled$retx)
 
 
 
