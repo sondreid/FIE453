@@ -55,9 +55,62 @@ evaluate_models <- function(modelList, train_df, test_df) {
   
 }
 
+evaluate_models_nn <- function(modelList, train_df, test_df) {
+  
+  #' @description     Function that evaluates the model both on the training set
+  #'                  and the test set by returning RMSE and MAE
+  #' 
+  #' @param modelList Passing a list with fitted models
+  #' @param train_df    Dataframe of training data
+  #' #' @param test_df   Passing test data frame
+  #' @return          Returns a tibble of train and test metrics
+  
+  
+  train_df_reduced_scaled <- train_df_reduced %>% dplyr::select(-costat) %>% 
+    scale_py() %>% 
+    as_tibble() %>% 
+    mutate(costat = train_df_reduced$costat)
+  
+  
+  test_df_reduced_scaled <- test_df_reduced %>% dplyr::select(-costat) %>% 
+    scale_py() %>% 
+    as_tibble() %>% 
+    mutate(costat = test_df_reduced$costat)
+  
+  model_performance <- tibble()
+  
+  for (model in modelList) {
+    test_predictions          <- predict(model, newdata = test_df_reduced_scaled)
+    train_predictions         <- predict(model, newdata = train_df_reduced_scaled)
+    test_performance_metrics  <- postResample(pred = test_predictions, 
+                                              obs = test_df$retx)
+    train_performance_metrics <- postResample(pred = train_predictions, 
+                                              obs = train_df$retx)
+    
+    model_performance %<>% bind_rows(
+      tibble(
+        "Model name"    =  model$method,
+        "Training RMSE" = train_performance_metrics[[1]],
+        "Training MAE"  = train_performance_metrics[[3]],
+        "Test RMSE"     = test_performance_metrics[[1]],
+        "Test MAE"      = test_performance_metrics[[3]]
+      )
+    )
+  }
+  
+  return (model_performance)
+  
+}
+
+
+
 modelList <- list(knn_model,gbm_model, bayesian_ridge_model)   # List of all models
 "Uncomment to perform model evaluation"
-model_evaluation <- evaluate_models(modelList, train_df,  test_df)  %>%  arrange(`Test MAE`)
+model_evaluation <- evaluate_models(modelList, train_df_scaled,  test_df_scaled)  %>%  arrange(`Test MAE`)
+
+
+
+
 #save(model_evaluation, file = "model_results/model_evalution.Rdata")
 
 load(file = "model_results/model_evalution.Rdata")
@@ -137,23 +190,26 @@ get_company_name <- function(input_permno) {
 
 
 
-select_stocks <- function(test_df, selected_model) {
+stock_level_predictions_caret <- function(selected_test_df, selected_model, verbose = F) {
   
   #' @description:         Function that selects stocks based on predictability
   #'                       with their performance metrics
   #' 
-  #' @param test_df        Passing a test data frame 
+  #' @param selected_test_df        Passing a test data frame 
   #' @param selected_model Passing a selected model
   #' @return               Companies with highest predictability
   
-  companies <- test_df$permno %>% unique()
+  companies <- selected_test_df$permno %>% unique()
   
   
   company_predictability <- tibble()
-  
+  num_companies <- length(companies)
   for (company in companies) {
     
-    company_data <- test_df %>% 
+    i <- i+1
+    if (verbose) print(paste("> company", i, " of ", num_companies))
+    
+    company_data <- selected_test_df %>% 
       filter(permno == company)
     
     company_predictions <- predict(selected_model, company_data)
@@ -173,7 +229,7 @@ select_stocks <- function(test_df, selected_model) {
 }
 
 
-select_stocks_nn <- function(test_df, selected_model) {
+stock_level_predictions_nn <- function(selected_test_df, selected_model, verbose = F) {
   
   #' @description:         Function that selects stocks based on predictability
   #'                       with their performance metrics
@@ -182,20 +238,23 @@ select_stocks_nn <- function(test_df, selected_model) {
   #' @param selected_model Passing a selected model
   #' @return               Companies with highest predictability
   
-  companies <- test_df$permno %>% unique()
+  companies <- selected_test_df$permno %>% unique()
   
   
   company_predictability <- tibble()
-  
+  num_companies <- length(companies)
+  i <- 0
   for (company in companies) {
+    i <- i+1
+    if (verbose) print(paste("> company", i, " of ", num_companies))
     
-    company_data <- test_df %>% 
+    company_data <- selected_test_df %>% 
       filter(permno == company)
     
-    company_predictions <- (selected_model %>% predict(test_df %>% dplyr::select(-retx)))[ , 1]
-    company_performance_metrics <- postResample(pred = company_predictions, 
-                                                obs = company_data$retx)
-    
+    company_predictions <- selected_model %>% predict(company_data %>% dplyr::select(-retx))
+   
+    company_performance_metrics <- postResample(company_predictions[ , 1], 
+                                                company_data$retx)
     company_predictability %<>% bind_rows(
       tibble("Company name"       = get_company_name(company_data$permno[1]),
              "Company identifier" = company_data$permno[1],
@@ -209,7 +268,7 @@ select_stocks_nn <- function(test_df, selected_model) {
 }
 
 
-select_stocks_always_0 <- function(test_df) {
+stock_level_predictions_always_zero <- function(selected_test_df) {
   
   #' @description:         Function that selects stocks based on predictability
   #'                       with their performance metrics
@@ -217,13 +276,13 @@ select_stocks_always_0 <- function(test_df) {
   #' @param test_df        Passing a test data frame 
   #' @return               Companies with highest predictability
   
-  companies <- test_df$permno %>% unique()
+  companies <- selected_test_df$permno %>% unique()
   
   
   company_predictability <- tibble()
   
   for (company in companies) {
-    company_data <- test_df %>% 
+    company_data <- selected_test_df %>% 
       filter(permno == company)
     
     
@@ -242,7 +301,7 @@ select_stocks_always_0 <- function(test_df) {
   
 }
 
-always_0_stocks <- select_stocks_always_0(test_df)
+
 
 
 
@@ -289,7 +348,99 @@ selected_stock_company_info <- function(selected_stocks, test_df,  n) {
 }
 
 
-selected_stocks <- select_stocks_nn(test_df_scaled, best_model_nn_1_layer_all[[1]]) %>%  arrange(`Test MAE`)
+always_0_stocks <- select_stocks_always_0(test_df_scaled)
+
+selected_stocks_nn <- stock_level_predictions_nn(test_df_scaled, best_model_nn_1_layer_all[[1]]) %>%  arrange(`Test MAE`)
+
+
+
+
+
+
+mean_metric_stock_level <- function(num_top, selected_test_df,  nn_models, caret_models) {
+  
+  #'
+  #'
+  #'
+  model_performance <- tibble()
+  
+  for (model in caret_models) {
+    stock_level_predictions <- stock_level_predictions_caret(selected_test_df, model[[1]]) %>%  arrange(`Test MAE`)
+    stock_level_predictions %<>% head(num_top)
+    model_mean_mae <- stock_level_predictions$`Test MAE` %>% mean()
+    model_mean_rmse <- stock_level_predictions$`Test RMSE` %>% mean()
+    
+    model_performance %<>% bind_rows(
+      tibble(
+        "Model name"               = model[[2]],
+        "RMSE top stocks"          = model_mean_rmse,
+        "MAE top stocks"           = model_mean_mae)
+    )
+    
+    
+  }
+  for (model in nn_models) {
+    stock_level_predictions <- stock_level_predictions_nn(selected_test_df, model[[1]]) %>%  arrange(`Test MAE`)
+    stock_level_predictions %<>% head(num_top)
+    model_mean_mae <- stock_level_predictions$`Test MAE` %>% mean()
+    model_mean_rmse <- stock_level_predictions$`Test RMSE` %>% mean()
+    
+    model_performance %<>% bind_rows(
+      tibble(
+             "Model name"               = model[[2]],
+             "RMSE top stocks"          = model_mean_rmse,
+             "MAE top stocks"           = model_mean_mae)
+    )
+    
+
+  }
+  
+  
+
+  
+  
+  naive_0_benchmark_predictions <- stock_level_predictions_always_zero(selected_test_df)
+  naive_0_benchmark_mae <- naive_0_benchmark_predictions$`Test MAE` %>% mean()
+  naive_0_benchmark_rmse <- naive_0_benchmark_predictions$`Test RMSE` %>% mean()
+  model_performance %<>% bind_rows(
+    tibble(
+      "Model name"               = "Zero prediction naive model",
+      "RMSE top stocks"          = naive_0_benchmark_rmse,
+      "MAE top stocks"           = naive_0_benchmark_mae)
+  )
+  
+  return (model_performance)
+  
+}
+
+nn_models <- list(
+  list(best_model_nn_1_layer_all[[1]], "Neural Network 1 hidden layer"), 
+  list(best_model_nn_2_layers_all[[1]], "Neural Network 2 hidden layers"),
+  list(best_model_nn_3_layers_all[[1]], "Neural Network 3 hidden layers"),
+  list(best_model_nn_4_layers_all[[1]], "Neural Network 4 hidden layers")
+)
+
+
+caret_models <- list(
+  list(gbm_model, "Gradient Boosting machine"),
+  list(knn_model, "K-nearest neighbors"),
+  list(bayesian_ridge_model, "Bayesian ridge regression")
+)
+
+model_metrics_stock_level <- mean_metric_stock_level(20, test_df_scaled, nn_models, caret_models) %>% arrange(`MAE top stocks`)
+
+
+model_metrics_stock_level %>% 
+  kable(caption = "Model performance on 20 most predictable stocks", 
+        digits  = 2)  %>% 
+  kable_classic(full_width = F, 
+                html_font = "Times New Roman") %>% 
+  save_kable("images/model_performance_stock_level.png", 
+             zoom = 3, 
+             density = 1900)
+
+
+### Based on best performing model, which stocks are predictable ###
 
 
 
@@ -308,36 +459,41 @@ selected_stock_company_info(selected_stocks, test_df, 10) %>%
 
 
 ## Summaries for all companies in test sets
-mean_marketcap <- test_df %>%
-  summarise(mean_marketcap = mean(marketcap))
-
-mean_volume <- test_df %>%
-  summarise(mean_volume = mean(vol))
-
-mean_cash <- test_df %>%
-  summarise(mean_cash = mean(chq))
 
 
-mean_operating_income <- test_df %>%
-  summarise(mean_operating_income = mean(oiadpq))
 
+all_company_metrics <- function(selected_test_df) {
+  mean_marketcap <- selected_test_df %>%
+    summarise(mean_marketcap = mean(marketcap))
+  
+  mean_volume <- selected_test_df %>%
+    summarise(mean_volume = mean(vol))
+  
+  mean_cash <- selected_test_df %>%
+    summarise(mean_cash = mean(chq))
+  
+  
+  mean_operating_income <- selected_test_df %>%
+    summarise(mean_operating_income = mean(oiadpq))
+  
+  
+  all_companies_summary <- 
+    tibble("Mean market cap" = mean_marketcap$mean_marketcap,
+           "Mean volume" = mean_volume$mean_volume,
+           "Mean cash" = mean_cash$mean_cash,
+           "Mean operating income" = mean_operating_income$mean_operating_income )
+  
+  
+  all_companies_summary %>% 
+    kable(caption = "Company mean metrics of all companies in test set", 
+          digits  = 2)  %>% 
+    kable_classic(full_width = F, 
+                  html_font = "Times New Roman") %>% 
+    save_kable("images/all_company_summary.png", 
+               zoom = 1.5, 
+               density = 1900)
 
-all_companies_summary <- 
-  tibble("Mean market cap" = mean_marketcap$mean_marketcap,
-         "Mean volume" = mean_volume$mean_volume,
-         "Mean cash" = mean_cash$mean_cash,
-         "Mean operating income" = mean_operating_income$mean_operating_income )
-
-
-all_companies_summary %>% 
-  kable(caption = "Company mean metrics of all companies in test set", 
-        digits  = 2)  %>% 
-  kable_classic(full_width = F, 
-                html_font = "Times New Roman") %>% 
-  save_kable("images/all_company_summary.png", 
-             zoom = 1.5, 
-             density = 1900)
-
+}
 
 
 ##### Monthly predictions

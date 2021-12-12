@@ -397,7 +397,8 @@ test_df_reduced %<>% anti_join(low_observation_count_companies)                 
 
 ### SAVE datasets
 
-save(train_df, selection_data, test_df, train_df_reduced, test_df_reduced, company_names_df, feature_names_df, file = "cached_data/train_test.Rdata") 
+save(train_df, selection_data, test_df, train_df_reduced, test_df_reduced, 
+     company_names_df, evaluation_data, feature_names_df, file = "cached_data/train_test.Rdata") 
 
 
 

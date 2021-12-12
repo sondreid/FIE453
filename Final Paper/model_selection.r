@@ -64,11 +64,12 @@ train_df_scaled <- train_df %>% dplyr::select(-costat,  -retx) %>%
   mutate(retx = train_df$retx) # Add in retx without scaling 
 
 
-test_df_scaled <- test_df %>% dplyr::select(-costat,  -retx) %>% 
+test_df_scaled <- test_df %>% dplyr::select(-costat,  -retx, -permno) %>% 
   scale_py() %>% 
   as_tibble() %>% 
-  mutate(costat = test_df$costat) %>% 
-  mutate(retx = test_df$retx) # Add in retx without scaling
+  mutate(costat = test_df$costat,
+         retx = test_df$retx, # Add in retx without scaling
+         permno = test_df$permno)
 
 
 
@@ -80,11 +81,13 @@ train_df_reduced_scaled <- train_df_reduced %>% dplyr::select(-costat, -retx) %>
   mutate(retx = train_df_reduced$retx)
 
 
-test_df_reduced_scaled <- test_df_reduced %>% dplyr::select(-costat,  -retx) %>% 
+test_df_reduced_scaled <- test_df_reduced %>% dplyr::select(-costat,  -retx, -permno) %>% 
   scale_py() %>% 
   as_tibble() %>% 
-  mutate(costat = test_df_reduced$costat) %>% 
-  mutate(retx = test_df_reduced$retx)
+  mutate(costat = test_df_reduced$costat,
+         retx = test_df_reduced$retx, # Add in retx without scaling
+         permno = test_df_reduced$permno)
+
 
 
 
@@ -785,6 +788,7 @@ gbm_model <- caret::train(retx ~ .,
                    metric     = "MAE",                                             
                    tuneLength   = 25,
                    trControl  = train_control)
+
 
 gbm_preds <- predict(gbm_model, test_df_scaled)
 postResample(gbm_preds, test_df$retx)
