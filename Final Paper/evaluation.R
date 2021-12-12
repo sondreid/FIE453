@@ -347,12 +347,46 @@ selected_stock_company_info <- function(selected_stocks, test_df,  n) {
   
 }
 
+## Summaries for all companies in test sets
+
+
+
+all_company_metrics <- function(selected_test_df) {
+  mean_marketcap <- selected_test_df %>%
+    summarise(mean_marketcap = mean(marketcap))
+  
+  mean_volume <- selected_test_df %>%
+    summarise(mean_volume = mean(vol))
+  
+  mean_cash <- selected_test_df %>%
+    summarise(mean_cash = mean(chq))
+  
+  
+  mean_operating_income <- selected_test_df %>%
+    summarise(mean_operating_income = mean(oiadpq))
+  
+  
+  all_companies_summary <- 
+    tibble("Mean market cap" = mean_marketcap$mean_marketcap,
+           "Mean volume" = mean_volume$mean_volume,
+           "Mean cash" = mean_cash$mean_cash,
+           "Mean operating income" = mean_operating_income$mean_operating_income )
+  
+  
+  all_companies_summary %>% 
+    kable(caption = "Company mean metrics of all companies in test set", 
+          digits  = 2)  %>% 
+    kable_classic(full_width = F, 
+                  html_font = "Times New Roman") %>% 
+    save_kable("images/all_company_summary.png", 
+               zoom = 1.5, 
+               density = 1900)
+  
+}
+
+
 
 #always_0_stocks <- select_stocks_always_0(test_df_scaled)
-
-#selected_stocks_nn_1_layer <- stock_level_predictions_nn(test_df_scaled, best_model_nn_1_layer_all[[1]]) %>%  arrange(`Test MAE`)
-
-
 
 
 
@@ -408,18 +442,28 @@ mean_metric_stock_level <- function(num_top, selected_test_df,  nn_model_metrics
   
 }
 
+
+selected_stocks_knn            <- stock_level_predictions_caret(test_df_scaled, knn_model)
+selected_stocks_bayesian_ridge <- stock_level_predictions_caret(test_df_scaled, bayesian_ridge_model)
+selected_stokcks_gbm           <- stock_level_predictions_caret(test_df_scaled, gbm_model)
+
+selected_stocks_nn_1_layer  <- stock_level_predictions_nn(test_df, best_model_nn_1_layer_all[[1]]) 
+selected_stocks_nn_2_layers <- stock_level_predictions_nn(test_df, best_model_nn_2_layers_all[[1]]) 
+selected_stocks_nn_3_layers <- stock_level_predictions_nn(test_df, best_model_nn_3_layers_all[[1]]) 
+selected_stocks_nn_4_layers <- stock_level_predictions_nn(test_df, best_model_nn_4_layers_all[[1]]) 
+
 nn_models <- list(
-  list(best_model_nn_1_layer_all[[1]], "Neural Network 1 hidden layer"), 
-  list(best_model_nn_2_layers_all[[1]], "Neural Network 2 hidden layers"),
-  list(best_model_nn_3_layers_all[[1]], "Neural Network 3 hidden layers"),
-  list(best_model_nn_4_layers_all[[1]], "Neural Network 4 hidden layers")
+  list(selected_stocks_nn_1_layer, "Neural Network 1 hidden layer"), 
+  list(selected_stocks_nn_2_layers, "Neural Network 2 hidden layers"),
+  list(selected_stocks_nn_3_layers, "Neural Network 3 hidden layers"),
+  list(selected_stocks_nn_4_layers, "Neural Network 4 hidden layers")
 )
 
 
 caret_models <- list(
-  list(gbm_model, "Gradient Boosting machine"),
-  list(knn_model, "K-nearest neighbors"),
-  list(bayesian_ridge_model, "Bayesian ridge regression")
+  list(selected_stokcks_gbm, "Gradient Boosting machine"),
+  list(selected_stocks_knn, "K-nearest neighbors"),
+  list(selected_stocks_bayesian_ridge, "Bayesian ridge regression")
 )
 
 model_metrics_stock_level <- mean_metric_stock_level(100, test_df_scaled, nn_models, caret_models) %>% arrange(`MAE top stocks`)
@@ -439,18 +483,8 @@ model_metrics_stock_level %>%
 
 ### Based on best performing model, which stocks are predictable ###
 
-
-nn_model_3_layer_stock_preds <- stock_level_predictions_nn(test_df_scaled, best_model_nn_3_layers_all[[1]])
-
-
-
-
-
-
-
-# Printing the most predictable stocks
-selected_stock_company_info(selected_stocks, test_df, 10) %>% 
-  kable(caption = "10 stocks of highest predictability", 
+selected_stocks_nn_1_layer %>% 
+  kable(caption = "20 stocks of highest predictability", 
         digits  = 2)  %>% 
   kable_classic(full_width = F, 
                 html_font = "Times New Roman") %>% 
@@ -459,46 +493,10 @@ selected_stock_company_info(selected_stocks, test_df, 10) %>%
              density = 1900)
 
 
-
-## Summaries for all companies in test sets
-
+################################################### Evaluation period ##################################
 
 
-all_company_metrics <- function(selected_test_df) {
-  mean_marketcap <- selected_test_df %>%
-    summarise(mean_marketcap = mean(marketcap))
-  
-  mean_volume <- selected_test_df %>%
-    summarise(mean_volume = mean(vol))
-  
-  mean_cash <- selected_test_df %>%
-    summarise(mean_cash = mean(chq))
-  
-  
-  mean_operating_income <- selected_test_df %>%
-    summarise(mean_operating_income = mean(oiadpq))
-  
-  
-  all_companies_summary <- 
-    tibble("Mean market cap" = mean_marketcap$mean_marketcap,
-           "Mean volume" = mean_volume$mean_volume,
-           "Mean cash" = mean_cash$mean_cash,
-           "Mean operating income" = mean_operating_income$mean_operating_income )
-  
-  
-  all_companies_summary %>% 
-    kable(caption = "Company mean metrics of all companies in test set", 
-          digits  = 2)  %>% 
-    kable_classic(full_width = F, 
-                  html_font = "Times New Roman") %>% 
-    save_kable("images/all_company_summary.png", 
-               zoom = 1.5, 
-               density = 1900)
-
-}
-
-
-##### Monthly predictions
+##### Monthly predictions ######################
 
 
 
