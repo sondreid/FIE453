@@ -350,14 +350,14 @@ selected_stock_company_info <- function(selected_stocks, test_df,  n) {
 
 #always_0_stocks <- select_stocks_always_0(test_df_scaled)
 
-#selected_stocks_nn <- stock_level_predictions_nn(test_df_scaled, best_model_nn_1_layer_all[[1]]) %>%  arrange(`Test MAE`)
+#selected_stocks_nn_1_layer <- stock_level_predictions_nn(test_df_scaled, best_model_nn_1_layer_all[[1]]) %>%  arrange(`Test MAE`)
 
 
 
 
 
 
-mean_metric_stock_level <- function(num_top, selected_test_df,  nn_models, caret_models) {
+mean_metric_stock_level <- function(num_top, selected_test_df,  nn_model_metrics, caret_model_metrics) {
   
   #'
   #'
@@ -365,8 +365,7 @@ mean_metric_stock_level <- function(num_top, selected_test_df,  nn_models, caret
   model_performance <- tibble()
   
   for (model in caret_models) {
-    stock_level_predictions <- stock_level_predictions_caret(selected_test_df, model[[1]]) %>%  arrange(`Test MAE`)
-    stock_level_predictions %<>% head(num_top)
+    stock_level_predictions <- model[[1]] %>%  arrange(`Test MAE`) %>% head(num_top)
     model_mean_mae <- stock_level_predictions$`Test MAE` %>% mean()
     model_mean_rmse <- stock_level_predictions$`Test RMSE` %>% mean()
     
@@ -380,23 +379,19 @@ mean_metric_stock_level <- function(num_top, selected_test_df,  nn_models, caret
     
   }
   for (model in nn_models) {
-    stock_level_predictions <- stock_level_predictions_nn(selected_test_df, model[[1]]) %>%  arrange(`Test MAE`)
-    stock_level_predictions %<>% head(num_top)
+    stock_level_predictions <- model[[1]] %>%  arrange(`Test MAE`) %>% head(num_top)
     model_mean_mae <- stock_level_predictions$`Test MAE` %>% mean()
     model_mean_rmse <- stock_level_predictions$`Test RMSE` %>% mean()
     
     model_performance %<>% bind_rows(
       tibble(
-             "Model name"               = model[[2]],
-             "RMSE top stocks"          = model_mean_rmse,
-             "MAE top stocks"           = model_mean_mae)
+        "Model name"               = model[[2]],
+        "RMSE top stocks"          = model_mean_rmse,
+        "MAE top stocks"           = model_mean_mae)
     )
     
 
   }
-  
-  
-
   
   
   naive_0_benchmark_predictions <- stock_level_predictions_always_zero(selected_test_df)
@@ -507,11 +502,56 @@ all_company_metrics <- function(selected_test_df) {
 
 
 
-predict_monthly_returns <- function(model, company, selection_data) {
+predict_monthly_returns_nn <- function(model, stocks, selection_data) {
   
+  data_selected_stocks <- selection_data %>% 
+    filter(permno %in% stocks)
+  
+  stock_predictions <- (model %>% predict(data_selected_stocks %>% select(-retx)))[,1]
+  
+  data_selected_companies %<>%
+    mutate(predicted_returns = stock_predictions)
+  
+  return(data_selected_stocks)
   
   
 }
+
+
+stock_predictions <- predict_monthly_returns_nn(se)
+
+plot_monthly_returns <- function(stock_predictions) {
+  #'
+  #'Plots series of observed and predicted returns.
+  stock_predictions %>% 
+    select(date, stock_predictions, retx) %>% 
+    pivot_longer(names_to = "type",
+                 values_to = "returns") %>% 
+  ggplot() +
+    geom_line(aes(x = date, y = returns, col = "type"), lwd = 1.06) +
+    guides(colour = guide_legend("Series name")) +
+    theme_bw() +
+    theme(legend.position = "bottom") +
+    labs(x = "Date", y = "Returns", title ="Predicted vs observed return in 2018-2019") +
+    scale_colour_manual(values=c("orange"))
+  
+}
+
+##### Calculate evaluation period MAE
+
+
+evaluation_mae <- postResample(stock_predictions$predicted_returns, stock_predictions$retx)
+
+tibble("Model" = "insert model",
+       "Evaluation period mae" = evaluation_mae[[3]]) %>% 
+  kable(caption = "Performance metric in evaluation period", 
+        digits  = 4) %>% 
+  kable_classic(full_width = F, 
+                html_font  = "Times New Roman")  %>% 
+  save_kable("images/evaluation_period_mae.png", 
+             zoom = 3, 
+             density = 1900)
+
 
 
 
