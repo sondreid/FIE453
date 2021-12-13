@@ -115,7 +115,7 @@ load_models <- function() {
   load(file = "models/3_nn_layers_model_history.Rdata")
   best_model_nn_3_layers_all <- list( load_model_hdf5("models/3_layers_nn_model.hdf5"), best_model_nn_3_layers_history)
   
-  load(file = "models/4_nn_layers_model_history.Rdata")
+  load(file = "models/4_nn_layer_model_history.Rdata")
   best_model_nn_4_layers_all <- list( load_model_hdf5("models/4_layers_nn_model.hdf5"), best_model_nn_4_layers_history)
   
   
