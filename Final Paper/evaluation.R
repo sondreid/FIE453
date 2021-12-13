@@ -584,7 +584,7 @@ predict_monthly_returns_nn <- function(selected_model, stocks, evaluation_data) 
 
 
 stock_predictions <- predict_monthly_returns_nn(best_model_nn_2_layers_all[[1]], 
-                                                nn_stock_level_mae[[2]][[1]]$`Company identifier` , # Company identifiers of the most predictable companies
+                                                two_layer_nn_predictable_stocks$`Company identifier`  , # Company identifiers of the most predictable companies
                                                 evaluation_data %>% filter(lubridate::year(date) < "2020"))
 
 ##### Calculate evaluation period MAE
@@ -596,28 +596,74 @@ postResample(rep(0, nrow(stock_predictions)), stock_predictions$retx)
 
 
 
-plot_monthly_returns_single_company <- function(stock_predictions, selected_permno) {
+plot_monthly_returns_single_company <- function(stock_predictions, selected_stock) {
   #'
   #'Plots series of observed and predicted returns.
-  stock_predictions %>% 
-    dplyr::filter(permno == selected_permno ) %>% 
+  predictions_and_company_info <- stock_predictions %>% 
+    dplyr::filter(permno == selected_stock$`Company identifier` ) %>% 
     as_tibble() %>% 
-    dplyr::select(date, predicted_returns, retx) %>% 
+    left_join(selected_stocks, by = c("permno" = "Company identifier")) %>% 
+    mutate("Company name" = sapply(`Company name`, stringr::str_to_title)) %>% 
     pivot_longer(cols = c(predicted_returns, retx),
                  names_to = "type",
-                 values_to = "returns") %>% 
-  ggplot() +
-    geom_line(aes(x = date, y = returns, col = type), lwd = 1.03) +
+                 values_to = "returns")
+  
+  company_name <- predictions_and_company_info$`Company name`[1]
+  predictions_and_company_info %>% ggplot() +
+    geom_line(aes(x = date, y = returns, col = type), lwd = 0.99) +
     guides(colour = guide_legend("Series name")) +
     theme_bw() +
     theme(legend.position = "bottom") +
-    labs(x = "Date", y = "Returns", title ="Predicted vs observed return in 2018-2019") +
+    labs(x = "Date", y = "Returns", title = paste("Predicted vs observed return in 2018-2019 of ", company_name )) +
     scale_colour_manual(values=c("orange", "black"))
   
 }
+plot_monthly_returns_single_company(stock_predictions, two_layer_nn_predictable_stocks %>% head(1))
+ggsave(filename = "images/evaluation_plot_most_predictable_stock.png", scale = 1, dpi = 1200)
 
-plot_monthly_returns_single_company(stock_predictions, 12667  )
 
+
+plot_monthly_returns_companies <- function(stock_predictions, selected_stocks, selected_title, selected_ncol = 2) {
+  #'
+  #'Plots series of observed and predicted returns.
+  stock_predictions %>% 
+    dplyr::filter(permno %in% selected_stocks$`Company identifier` ) %>% 
+    left_join(selected_stocks, by = c("permno" = "Company identifier")) %>% 
+    mutate("Company name" = sapply(`Company name`, stringr::str_to_title)) %>% 
+    as_tibble() %>% 
+    pivot_longer(cols = c(predicted_returns, retx),
+                 names_to = "type",
+                 values_to = "returns") %>% 
+    ggplot() +
+    geom_line(aes(x = date, y = returns, col = type), lwd = 0.99) +
+    facet_wrap(~`Company name`, ncol = selected_ncol) +
+    guides(colour = guide_legend("Series name")) +
+    theme_bw() +
+    theme(legend.position = "bottom") +
+    labs(x = "Date", y = "Returns", title = selected_title) +
+    scale_colour_manual(values=c("orange", "black"))
+  
+  
+  
+}
+
+# Make a facet plot of the five most predictable stocks in the evaluation period
+
+
+plot_monthly_returns_companies(stock_predictions,  two_layer_nn_predictable_stocks %>% head(15),
+                              "Predicted vs Observed Returns of Most Predictable Stocks in 2018-2019", 3)
+ggsave(filename = "images/evalution_plot_15_first_predictable_stocks.png", scale = 1.5, dpi = 700, width = 5, height = 8)
+
+
+
+plot_monthly_returns_companies(stock_predictions,  two_layer_nn_predictable_stocks %>% tail(15),
+                               "Predicted vs Observed Returns of Most Predictable Stocks in 2018-2019", 3)
+ggsave(filename = "images/evalution_plot_15_last_predictable_stocks.png", scale = 1.5, dpi = 700, width = 5, height = 8)
+
+
+plot_monthly_returns_companies(stock_predictions,  two_layer_nn_predictable_stocks %>% head(5), 
+                                "Predicted vs Observed Returns of Five Most Predictable Stocks in 2018-2019" )
+ggsave(filename = "images/evalution_plot_5_most_predictable_stocks.png", scale = 2, dpi = 500, width = 5, height = 5)
 
 
 tibble("Model" = "insert model",
