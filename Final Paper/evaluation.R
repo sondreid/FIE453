@@ -472,6 +472,13 @@ caret_stock_level_mae <- list(
 
 load(file = "model_results/stock_level_performance.Rdata")
 
+
+## 2- layer neural network model predictable stocks
+two_layer_nn_predictable_stocks <- nn_stock_level_mae[[2]][[1]] %>% 
+  arrange(`Test MAE`) %>% 
+  head(30) 
+
+
 ### Model performance on 30 most predictable stocks
 
 model_metrics_stock_level %>% 
@@ -482,6 +489,7 @@ model_metrics_stock_level %>%
   save_kable("images/model_performance_stock_level.png", 
              zoom = 3, 
              density = 1900)
+
 
 
 #### Training process graph of optimal neural network model #####
@@ -501,11 +509,11 @@ ggsave(filename = "images/neural_net_training.png", scale = 1, dpi = 1000)
 
 
 
+
+
 ### Based on best performing model, which stocks are predictable ###
 
-nn_stock_level_mae[[2]][[1]] %>% 
-  arrange(`Test MAE`) %>% 
-  head(30) %>% 
+two_layer_nn_predictable_stocks %>% 
   mutate("Company name" = sapply(`Company name`, stringr::str_to_title)) %>% 
   kable(caption = "30 stocks of highest predictability", 
         digits  = 5)  %>% 
@@ -519,8 +527,7 @@ nn_stock_level_mae[[2]][[1]] %>%
 #### Predictable companies financial indicators  ###
 
 
-selected_stock_company_info(nn_stock_level_mae[[2]][[1]]  %>%  arrange(`Test MAE`) %>% 
-                              head(30), test_df ) %>% 
+selected_stock_company_info(two_layer_nn_predictable_stocks, test_df ) %>% 
   kable(caption = "Financial indicators of 30 most predictable stocks", 
         digits  = 5)  %>% 
   kable_classic(full_width = F, 
@@ -532,8 +539,7 @@ selected_stock_company_info(nn_stock_level_mae[[2]][[1]]  %>%  arrange(`Test MAE
 
 #### Predictable companies financial indicators, average indicator values ###
 
-selected_stock_company_info(nn_stock_level_mae[[2]][[1]]  %>%  arrange(`Test MAE`) %>% 
-                              head(30), test_df ) %>% 
+selected_stock_company_info(two_layer_nn_predictable_stocks, test_df ) %>% 
   summarise("Mean market cap" = mean(`Mean market cap`), 
             "Mean volume" = mean(`Mean volume`), 
             "Mean cash" = mean(`Mean cash`), 
@@ -561,15 +567,15 @@ all_company_metrics(test_df)
 
 
 
-predict_monthly_returns_nn <- function(model, stocks, evaluation_data) {
+predict_monthly_returns_nn <- function(selected_model, stocks, evaluation_data) {
   
   data_selected_stocks <- evaluation_data %>% 
     filter(permno %in% stocks)
   
-  stock_predictions <- (model %>% predict(data_selected_stocks %>% dplyr::select(-retx)))[,1]
+  stock_predictions <- selected_model %>% predict(data_selected_stocks %>% dplyr::select(-retx, -date, -permno))
   
-  data_selected_companies %<>%
-    mutate(predicted_returns = stock_predictions)
+  data_selected_stocks %<>%
+    mutate(predicted_returns = stock_predictions[,1])
   
   return(data_selected_stocks)
   
@@ -578,30 +584,41 @@ predict_monthly_returns_nn <- function(model, stocks, evaluation_data) {
 
 
 stock_predictions <- predict_monthly_returns_nn(best_model_nn_2_layers_all[[1]], 
-                                                nn_stock_level_mae[[2]][[1]]$`Company identifier`, # Company identifiers of the most predictable companies
-                                                evaluation_data)
-
-plot_monthly_returns <- function(stock_predictions) {
-  #'
-  #'Plots series of observed and predicted returns.
-  stock_predictions %>% 
-    select(date, stock_predictions, retx) %>% 
-    pivot_longer(names_to = "type",
-                 values_to = "returns") %>% 
-  ggplot() +
-    geom_line(aes(x = date, y = returns, col = "type"), lwd = 1.06) +
-    guides(colour = guide_legend("Series name")) +
-    theme_bw() +
-    theme(legend.position = "bottom") +
-    labs(x = "Date", y = "Returns", title ="Predicted vs observed return in 2018-2019") +
-    scale_colour_manual(values=c("orange"))
-  
-}
+                                                nn_stock_level_mae[[2]][[1]]$`Company identifier` , # Company identifiers of the most predictable companies
+                                                evaluation_data %>% filter(lubridate::year(date) < "2020"))
 
 ##### Calculate evaluation period MAE
 
 
-evaluation_mae <- postResample(stock_predictions$predicted_returns, stock_predictions$retx)
+postResample(stock_predictions$predicted_returns, stock_predictions$retx)
+
+postResample(rep(0, nrow(stock_predictions)), stock_predictions$retx)
+
+
+
+plot_monthly_returns_single_company <- function(stock_predictions, selected_permno) {
+  #'
+  #'Plots series of observed and predicted returns.
+  stock_predictions %>% 
+    dplyr::filter(permno == selected_permno ) %>% 
+    as_tibble() %>% 
+    dplyr::select(date, predicted_returns, retx) %>% 
+    pivot_longer(cols = c(predicted_returns, retx),
+                 names_to = "type",
+                 values_to = "returns") %>% 
+  ggplot() +
+    geom_line(aes(x = date, y = returns, col = type), lwd = 1.03) +
+    guides(colour = guide_legend("Series name")) +
+    theme_bw() +
+    theme(legend.position = "bottom") +
+    labs(x = "Date", y = "Returns", title ="Predicted vs observed return in 2018-2019") +
+    scale_colour_manual(values=c("orange", "black"))
+  
+}
+
+plot_monthly_returns_single_company(stock_predictions, 12667  )
+
+
 
 tibble("Model" = "insert model",
        "Evaluation period mae" = evaluation_mae[[3]]) %>% 
