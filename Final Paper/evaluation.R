@@ -7,172 +7,6 @@
 
 
 
-############### 
-# Kan kanskje slettes
-##########
-evaluate_models <- function(modelList, train_df, test_df) {
-  
-  #' @description     Function that evaluates the model both on the training set
-  #'                  and the test set by returning RMSE and MAE
-  #' 
-  #' @param modelList Passing a list with fitted models
-  #' @param train_df    Dataframe of training data
-  #' #' @param test_df   Passing test data frame
-  #' @return          Returns a tibble of train and test metrics
-  
-  
-  train_df_reduced_scaled <- train_df_reduced %>% dplyr::select(-costat) %>% 
-    scale_py() %>% 
-    as_tibble() %>% 
-    mutate(costat = train_df_reduced$costat)
-  
-  
-  test_df_reduced_scaled <- test_df_reduced %>% dplyr::select(-costat) %>% 
-    scale_py() %>% 
-    as_tibble() %>% 
-    mutate(costat = test_df_reduced$costat)
-  
-  model_performance <- tibble()
-  
-  for (model in modelList) {
-    test_predictions          <- predict(model, newdata = test_df_reduced_scaled)
-    train_predictions         <- predict(model, newdata = train_df_reduced_scaled)
-    test_performance_metrics  <- postResample(pred = test_predictions, 
-                                              obs = test_df$retx)
-    train_performance_metrics <- postResample(pred = train_predictions, 
-                                              obs = train_df$retx)
-    
-    model_performance %<>% bind_rows(
-      tibble(
-        "Model name"    =  model$method,
-        "Training RMSE" = train_performance_metrics[[1]],
-        "Training MAE"  = train_performance_metrics[[3]],
-        "Test RMSE"     = test_performance_metrics[[1]],
-        "Test MAE"      = test_performance_metrics[[3]]
-      )
-    )
-  }
-  
-  return (model_performance)
-  
-}
-
-evaluate_models_nn <- function(modelList, train_df, test_df) {
-  
-  #' @description     Function that evaluates the model both on the training set
-  #'                  and the test set by returning RMSE and MAE
-  #' 
-  #' @param modelList Passing a list with fitted models
-  #' @param train_df    Dataframe of training data
-  #' #' @param test_df   Passing test data frame
-  #' @return          Returns a tibble of train and test metrics
-  
-  
-  train_df_reduced_scaled <- train_df_reduced %>% dplyr::select(-costat) %>% 
-    scale_py() %>% 
-    as_tibble() %>% 
-    mutate(costat = train_df_reduced$costat)
-  
-  
-  test_df_reduced_scaled <- test_df_reduced %>% dplyr::select(-costat) %>% 
-    scale_py() %>% 
-    as_tibble() %>% 
-    mutate(costat = test_df_reduced$costat)
-  
-  model_performance <- tibble()
-  
-  for (model in modelList) {
-    test_predictions          <- predict(model, newdata = test_df_reduced_scaled)
-    train_predictions         <- predict(model, newdata = train_df_reduced_scaled)
-    test_performance_metrics  <- postResample(pred = test_predictions, 
-                                              obs = test_df$retx)
-    train_performance_metrics <- postResample(pred = train_predictions, 
-                                              obs = train_df$retx)
-    
-    model_performance %<>% bind_rows(
-      tibble(
-        "Model name"    =  model$method,
-        "Training RMSE" = train_performance_metrics[[1]],
-        "Training MAE"  = train_performance_metrics[[3]],
-        "Test RMSE"     = test_performance_metrics[[1]],
-        "Test MAE"      = test_performance_metrics[[3]]
-      )
-    )
-  }
-  
-  return (model_performance)
-  
-}
-
-
-
-
-
-#save(model_evaluation, file = "model_results/model_evalution.Rdata")
-
-load(file = "model_results/model_evalution.Rdata")
-
-# Printing the model evaluation results with kable extra
-model_evaluation %>% 
-  arrange(`Test MAE`) %>% 
-  kable(caption = "Performance metrics of tested models", 
-        digits  = 4) %>% 
-  kable_classic(full_width = F, 
-                html_font  = "Times New Roman")  %>% 
-  save_kable("images/evaluation_metrics_all_models.png", 
-             zoom = 1.5, 
-             density = 1500)
-
-
-
-# Statically typing names for models
-model_evaluation %>% 
-  arrange(`Test MAE`) %>% 
-  mutate("Model name" = c("Neural Net 10 neurons", "Bayesian Ridge Regression", "Neural Net 5 neurons", "Generalized Additive Models", "K-Nearest Neighbors")) %>% 
-  kable(caption = "Performance metrics of tested models", 
-        digits  = 4) %>% 
-  kable_classic(full_width = F, 
-                html_font  = "Times New Roman")  %>% 
-  save_kable("images/evaluation_metrics_all_models.png", 
-             zoom = 1.5, 
-             density = 1500)
-
-
-
-################### Compared to a benchmark model ########################################
-
-
-
-
-###### A benchmark model which only predicts 0 in returns
-
-
-make_0_benchmarK(test_df ) %>% 
-  tibble("Test MAE" = benchmark_0_results[[3]],
-         "Model" = "0 return prediction") %>% 
-  kable(caption = "Performance of 0-prediction model", 
-        digits  = 4) %>% 
-  kable_classic(full_width = F, 
-                html_font  = "Times New Roman") %>% 
-  save_kable("images/0_return_prediction.png", 
-             zoom = 3, 
-             density = 1500)
-
-### On reduced set
-
-make_0_benchmarK(test_df_reduced ) %>% 
-  tibble("Test MAE" = benchmark_0_results_all[[3]],
-         "Model" = "0 return prediction") %>% 
-  kable(caption = "Performance of 0-prediction model", 
-        digits  = 4) %>% 
-  kable_classic(full_width = F, 
-                html_font  = "Times New Roman")
-
-
-
-################################################################################
-###################### Select stocks based on predictability ###################
-################################################################################
 
 
 get_company_name <- function(input_permno) {
@@ -374,7 +208,7 @@ all_company_metrics <- function(selected_test_df) {
   
   all_companies_summary %>% 
     kable(caption = "Mean financial indicators of all test companies", 
-          digits  = 2)  %>% 
+          digits  = 0)  %>% 
     kable_classic(full_width = F, 
                   html_font = "Times New Roman") %>% 
     save_kable("images/all_company_summary.png", 
@@ -385,45 +219,28 @@ all_company_metrics <- function(selected_test_df) {
 
 
 
-ensemble_metrics <- function(nn_model_metrics, caret_model_metrics) {
+ensemble_metrics <- function(model_metrics) {
   
   ensemble_metrics <- tibble()
   
-  for (model in caret_models) {
+  for (model in model_metrics) {
     stock_level_predictions <- model[[1]] 
     if (ensemble_metrics %>% nrow() == 0 ) ensemble_metrics <-  stock_level_predictions
     else {
-      ensemble_metrics %<>% mutate(`Test MAE` = `Test MAE` + )
+      ensemble_metrics %<>% mutate(`Test MAE`  = `Test MAE` + stock_level_predictions$`Test MAE`,
+                                   `Test RMSE` = `Test RMSE` + stock_level_predictions$`Test RMSE`)
       
-    
     }
-    model_mean_mae <- stock_level_predictions$`Test MAE` %>% mean()
-    model_mean_rmse <- stock_level_predictions$`Test RMSE` %>% mean()
-    
-    model_performance %<>% bind_rows(
-      tibble(
-        "Model name"               = model[[2]],
-        "RMSE top stocks"          = model_mean_rmse,
-        "MAE top stocks"           = model_mean_mae)
-    )
-    
-    
-  }
-  for (model in nn_models) {
-    stock_level_predictions <- model[[1]] %>%  arrange(`Test MAE`) %>% head(num_top)
-    model_mean_mae <- stock_level_predictions$`Test MAE` %>% mean()
-    model_mean_rmse <- stock_level_predictions$`Test RMSE` %>% mean()
-    
-    model_performance %<>% bind_rows(
-      tibble(
-        "Model name"               = model[[2]],
-        "RMSE top stocks"          = model_mean_rmse,
-        "MAE top stocks"           = model_mean_mae)
-    )
-    
     
   }
   
+  # divide by number of models
+  ensemble_metrics %<>%
+    mutate(`Test MAE` = `Test MAE`/length(model_metrics),
+           `Test RMSE` = `Test RMSE`/length(model_metrics))
+  
+  
+  return(ensemble_metrics)
   
   
   
@@ -434,41 +251,36 @@ ensemble_metrics <- function(nn_model_metrics, caret_model_metrics) {
 
 
 
-mean_metric_stock_level <- function(num_top,  selected_test_df, nn_model_metrics, caret_model_metrics) {
+mean_metric_stock_level <- function(num_top,  selected_test_df, model_metrics) {
   
   #'
-  #'
+  #' @description: Calculates mean performance metrics for a set number of most predictable stocks.
+  #' Takes in two lists of MAE per companies. One for neural network models, and one for caret models (KNN, GBM and Bayesian ridge)
+  #' 
+  #' @num_top : number of most predictable companies
+  #' @selected_test_df:  test set 
+  #' @nn_model_metrics: list of neural network models and their respective performance metrics and names | list(metrics, name)
+  #' @caret_model_metrics: list of caret models and their respective performance metrics and names | list(metrics, name)
   #'
   model_performance <- tibble()
   
-  for (model in caret_models) {
-    stock_level_predictions <- model[[1]] %>%  arrange(`Test MAE`) %>% head(num_top)
-    model_mean_mae <- stock_level_predictions$`Test MAE` %>% mean()
-    model_mean_rmse <- stock_level_predictions$`Test RMSE` %>% mean()
-    
-    model_performance %<>% bind_rows(
-      tibble(
-        "Model name"               = model[[2]],
-        "RMSE top stocks"          = model_mean_rmse,
-        "MAE top stocks"           = model_mean_mae)
-    )
-    
-    
-  }
-  for (model in nn_models) {
-    stock_level_predictions <- model[[1]] %>%  arrange(`Test MAE`) %>% head(num_top)
-    model_mean_mae <- stock_level_predictions$`Test MAE` %>% mean()
-    model_mean_rmse <- stock_level_predictions$`Test RMSE` %>% mean()
-    
-    model_performance %<>% bind_rows(
-      tibble(
-        "Model name"               = model[[2]],
-        "RMSE top stocks"          = model_mean_rmse,
-        "MAE top stocks"           = model_mean_mae)
-    )
-    
 
+  
+  for (model in model_metrics) {
+    stock_level_predictions <- model[[1]] %>%  arrange(`Test MAE`) %>% head(num_top)
+    model_mean_mae <- stock_level_predictions$`Test MAE` %>% mean()
+    model_mean_rmse <- stock_level_predictions$`Test RMSE` %>% mean()
+    
+    model_performance %<>% bind_rows(
+      tibble(
+        "Model name"               = model[[2]],
+        "RMSE top stocks"          = model_mean_rmse,
+        "MAE top stocks"           = model_mean_mae)
+    )
+    
+    
   }
+  
   
   
   naive_0_benchmark_predictions <- stock_level_predictions_always_zero(selected_test_df)
@@ -495,30 +307,41 @@ selected_stocks_nn_2_layers <- stock_level_predictions_nn(test_df, best_model_nn
 selected_stocks_nn_3_layers <- stock_level_predictions_nn(test_df, best_model_nn_3_layers_all[[1]]) 
 selected_stocks_nn_4_layers <- stock_level_predictions_nn(test_df, best_model_nn_4_layers_all[[1]]) 
 
-nn_stock_level_mae <- list(
+
+
+stock_level_mae <- list(
   list(selected_stocks_nn_1_layer, "Neural Network 1 hidden layer"), 
   list(selected_stocks_nn_2_layers, "Neural Network 2 hidden layers"),
   list(selected_stocks_nn_3_layers, "Neural Network 3 hidden layers"),
-  list(selected_stocks_nn_4_layers, "Neural Network 4 hidden layers")
-)
-
-
-caret_stock_level_mae <- list(
+  list(selected_stocks_nn_4_layers, "Neural Network 4 hidden layers"),
   list(selected_stokcks_gbm, "Gradient Boosting machine"),
   list(selected_stocks_knn, "K-nearest neighbors"),
   list(selected_stocks_bayesian_ridge, "Bayesian ridge regression")
+  
+  
 )
 
 
-#model_metrics_stock_level <- mean_metric_stock_level(30, test_df,  nn_stock_level_mae, caret_stock_level_mae) %>% arrange(`MAE top stocks`)
 
-#save(nn_stock_level_mae, caret_stock_level_mae, model_metrics_stock_level,  file = "model_results/stock_level_performance.Rdata")
+
+
+#model_metrics_stock_level <- mean_metric_stock_level(30, test_df, stock_level_mae) %>% arrange(`MAE top stocks`)
+
+#save(stock_level_mae, model_metrics_stock_level,  file = "model_results/stock_level_performance.Rdata")
 
 load(file = "model_results/stock_level_performance.Rdata")
 
 
+### Ensemble performance metrics 
+
+least_predictable_stocks_ensemble <- ensemble_metrics(stock_level_mae) %>% arrange(`Test MAE`) %>% tail(20)
+most_predictable_stocks_ensemble <- ensemble_metrics(stock_level_mae) %>% arrange(`Test MAE`) %>% head(20) 
+
+
+
+
 ## 2- layer neural network model predictable stocks
-two_layer_nn_predictable_stocks <- nn_stock_level_mae[[2]][[1]] %>% 
+two_layer_nn_predictable_stocks <- stock_level_mae[[2]][[1]] %>% 
   arrange(`Test MAE`) %>% 
   head(30) 
 
@@ -538,8 +361,6 @@ model_metrics_stock_level %>%
 
 #### Training process graph of optimal neural network model #####
 
-
-
 best_model_nn_2_layers_all[[2]] %>% 
   plot() +
   theme_bw() +
@@ -555,7 +376,12 @@ ggsave(filename = "images/neural_net_training.png", scale = 1, dpi = 1000)
 
 
 
-### Based on best performing model, which stocks are predictable ###
+
+
+### Based on best performing model, which stocks are predictable 
+
+
+## Table of 30 most predictable stocks
 
 two_layer_nn_predictable_stocks %>% 
   mutate("Company name" = sapply(`Company name`, stringr::str_to_title)) %>% 
@@ -568,17 +394,21 @@ two_layer_nn_predictable_stocks %>%
              density = 1900)
 
 
+
+
 #### Predictable companies financial indicators  ###
 
 
 selected_stock_company_info(two_layer_nn_predictable_stocks, test_df ) %>% 
   kable(caption = "Financial indicators of 30 most predictable stocks", 
-        digits  = 5)  %>% 
+        digits  = 0)  %>% 
   kable_classic(full_width = F, 
                 html_font = "Times New Roman") %>% 
   save_kable("images/predictable_stocks_characteristics.png", 
              zoom = 3, 
              density = 1900)
+
+
 
 
 #### Predictable companies financial indicators, average indicator values ###
@@ -589,7 +419,7 @@ selected_stock_company_info(two_layer_nn_predictable_stocks, test_df ) %>%
             "Mean cash" = mean(`Mean cash`), 
             "Mean operating income" = mean(`Mean operating income`), ) %>% 
   kable(caption = "Mean financial indicators of 30 most predictable stocks", 
-        digits  = 5)  %>% 
+        digits  = 0)  %>% 
   kable_classic(full_width = F, 
                 html_font = "Times New Roman") %>% 
   save_kable("images/predictable_stocks_characteristics_mean.png", 
@@ -597,9 +427,9 @@ selected_stock_company_info(two_layer_nn_predictable_stocks, test_df ) %>%
              density = 1900)
 
 ## Average indicator values all test stocks ##### 
+all_company_metrics(test_df) # Call on function that calculates average financial indicators for all companies in test set
 
 
-all_company_metrics(test_df)
 
 
 
@@ -707,6 +537,8 @@ plot_monthly_returns_companies <- function(stock_predictions, selected_stocks, s
   
   
 }
+
+
 
 # Make a facet plot of the five most predictable stocks in the evaluation period
 
