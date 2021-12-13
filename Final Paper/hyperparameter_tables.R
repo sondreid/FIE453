@@ -9,9 +9,10 @@ tibble("Neural network models" = list("One hidden layer", "Two hidden layers", "
        "Batch normalization" = list(list("No"), list("Yes", "No"), list("Yes", "No"), list("Yes", "No")),
        "Dropout rates" = list(list(0), list(0, 0.2, 0.4), list(0, 0.2, 0.4), list(0, 0.2, 0.4)),
        "Batch sizes"   = list(list(300, 500, 1000), list(500, 1000, 2000), list(500, 1000, 2000), list(500, 1000, 2000)),
-       "Maximum epochs" = list(list(200), list(200), list(200), list(200))
+       "Maximum epochs" = list(list(200), list(200), list(200), list(200)),
+       "Patience"       = list(list(1, 2,10, 5, 15), list(1, 5, 20), list(1, 5, 20), list(1, 5, 20))
        ) %>% 
-  kable(caption = "Tested hyperparameters in Neural Network models", 
+  kable(caption = "Tested Hyperparameters of Neural Network models", 
         digits  = 4) %>% 
   kable_classic(full_width = F, 
                 html_font  = "Times New Roman")  %>% 
