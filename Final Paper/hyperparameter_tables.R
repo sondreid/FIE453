@@ -30,7 +30,10 @@ tibble("vwretd" = "Market Excess Return", "vol" = "Volume", "shrout" = "Shared O
        "dpq" = "Depreciation and Amortization - Total", "lcoq" = "Current Liabilities - Other - Total",
        "capsq" = "Capital Surplus/Share Premium Reserve", "acoq" = "Current Asets - Other - Total",
        "invtq" = "Inventories - Total", "cstkq" = "Common/Ordinary Stock (Capital)",
-       "intanoq" = "Other Intangibles", "dlttq" = "Long-Term Debt - Total") %>% 
+       "intanoq" = "Other Intangibles", "dlttq" = "Long-Term Debt - Total",
+       "loq" = "Liabilities - Other", "nopiq" = "Non-Operating Income (Expense) - Total", "oeps12" = "Earnings Per Share from Operations - 12 Month Moving", 
+       "oepsxq" = "Earnings Per Share - Diluted - from Operations", "oiadpq" = "Operations Income After Depreciation - Quarterly", "ppentq" = "Property Plant and Equipment - Total (Net)",
+       "reunaq" = "Unadjusted Retained Earnings", "costat" = "Active/Inactive Status Marker", "marketcap" = "Market Capitilization") %>% 
   t() %>% 
   kable(caption = "Feature Description", 
         digits  = 4) %>% 
@@ -39,6 +42,9 @@ tibble("vwretd" = "Market Excess Return", "vol" = "Volume", "shrout" = "Shared O
   save_kable("C:/Users/joonl/Downloads/feature_description1.png", 
              zoom = 3, 
              density = 1900)
+
+
+
 
 
 ## Best performing neural network architecture
