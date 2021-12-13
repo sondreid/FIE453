@@ -204,6 +204,7 @@ stock_level_predictions_caret <- function(selected_test_df, selected_model, verb
   
   company_predictability <- tibble()
   num_companies <- length(companies)
+  i <- 0
   for (company in companies) {
     
     i <- i+1
@@ -347,127 +348,6 @@ selected_stock_company_info <- function(selected_stocks, test_df,  n) {
   
 }
 
-
-#always_0_stocks <- select_stocks_always_0(test_df_scaled)
-
-selected_stocks_nn <- stock_level_predictions_nn(test_df_scaled, best_model_nn_1_layer_all[[1]]) %>%  arrange(`Test MAE`)
-
-
-
-
-
-
-mean_metric_stock_level <- function(num_top, selected_test_df,  nn_models, caret_models) {
-  
-  #'
-  #'
-  #'
-  model_performance <- tibble()
-  
-  for (model in caret_models) {
-    stock_level_predictions <- stock_level_predictions_caret(selected_test_df, model[[1]]) %>%  arrange(`Test MAE`)
-    stock_level_predictions %<>% head(num_top)
-    model_mean_mae <- stock_level_predictions$`Test MAE` %>% mean()
-    model_mean_rmse <- stock_level_predictions$`Test RMSE` %>% mean()
-    
-    model_performance %<>% bind_rows(
-      tibble(
-        "Model name"               = model[[2]],
-        "RMSE top stocks"          = model_mean_rmse,
-        "MAE top stocks"           = model_mean_mae)
-    )
-    
-    
-  }
-  for (model in nn_models) {
-    stock_level_predictions <- stock_level_predictions_nn(selected_test_df, model[[1]]) %>%  arrange(`Test MAE`)
-    stock_level_predictions %<>% head(num_top)
-    model_mean_mae <- stock_level_predictions$`Test MAE` %>% mean()
-    model_mean_rmse <- stock_level_predictions$`Test RMSE` %>% mean()
-    
-    model_performance %<>% bind_rows(
-      tibble(
-             "Model name"               = model[[2]],
-             "RMSE top stocks"          = model_mean_rmse,
-             "MAE top stocks"           = model_mean_mae)
-    )
-    
-
-  }
-  
-  
-
-  
-  
-  naive_0_benchmark_predictions <- stock_level_predictions_always_zero(selected_test_df)
-  naive_0_benchmark_mae <- naive_0_benchmark_predictions$`Test MAE` %>% mean()
-  naive_0_benchmark_rmse <- naive_0_benchmark_predictions$`Test RMSE` %>% mean()
-  model_performance %<>% bind_rows(
-    tibble(
-      "Model name"               = "Zero prediction naive model",
-      "RMSE top stocks"          = naive_0_benchmark_rmse,
-      "MAE top stocks"           = naive_0_benchmark_mae)
-  )
-  
-  return (model_performance)
-  
-}
-
-## Stock level predictions 
-
-
-nn_models <- list(
-  list(best_model_nn_1_layer_all[[1]], "Neural Network 1 hidden layer"), 
-  list(best_model_nn_2_layers_all[[1]], "Neural Network 2 hidden layers"),
-  list(best_model_nn_3_layers_all[[1]], "Neural Network 3 hidden layers"),
-  list(best_model_nn_4_layers_all[[1]], "Neural Network 4 hidden layers")
-)
-
-
-caret_models <- list(
-  list(gbm_model, "Gradient Boosting machine"),
-  list(knn_model, "K-nearest neighbors"),
-  list(bayesian_ridge_model, "Bayesian ridge regression")
-)
-
-model_metrics_stock_level <- mean_metric_stock_level(100, test_df_scaled, nn_models, caret_models) %>% arrange(`MAE top stocks`)
-
-save(model_metrics_stock_level, file = "model_results/stock_level_performance.Rdata")
-
-
-model_metrics_stock_level %>% 
-  kable(caption = "Model performance on 20 most predictable stocks", 
-        digits  = 2)  %>% 
-  kable_classic(full_width = F, 
-                html_font = "Times New Roman") %>% 
-  save_kable("images/model_performance_stock_level.png", 
-             zoom = 3, 
-             density = 1900)
-
-
-### Based on best performing model, which stocks are predictable ###
-
-
-nn_model_3_layer_stock_preds <- stock_level_predictions_nn(test_df_scaled, best_model_nn_3_layers_all[[1]])
-
-
-
-
-
-
-
-# Printing the most predictable stocks
-selected_stock_company_info(selected_stocks, test_df, 10) %>% 
-  kable(caption = "10 stocks of highest predictability", 
-        digits  = 2)  %>% 
-  kable_classic(full_width = F, 
-                html_font = "Times New Roman") %>% 
-  save_kable("images/predictable_stocks.png", 
-             zoom = 1.5, 
-             density = 1900)
-
-
-
 ## Summaries for all companies in test sets
 
 
@@ -502,19 +382,175 @@ all_company_metrics <- function(selected_test_df) {
     save_kable("images/all_company_summary.png", 
                zoom = 1.5, 
                density = 1900)
+  
+}
 
+
+
+#always_0_stocks <- select_stocks_always_0(test_df_scaled)
+
+
+
+
+mean_metric_stock_level <- function(num_top, selected_test_df,  nn_model_metrics, caret_model_metrics) {
+  
+  #'
+  #'
+  #'
+  model_performance <- tibble()
+  
+  for (model in caret_models) {
+    stock_level_predictions <- model[[1]] %>%  arrange(`Test MAE`) %>% head(num_top)
+    model_mean_mae <- stock_level_predictions$`Test MAE` %>% mean()
+    model_mean_rmse <- stock_level_predictions$`Test RMSE` %>% mean()
+    
+    model_performance %<>% bind_rows(
+      tibble(
+        "Model name"               = model[[2]],
+        "RMSE top stocks"          = model_mean_rmse,
+        "MAE top stocks"           = model_mean_mae)
+    )
+    
+    
+  }
+  for (model in nn_models) {
+    stock_level_predictions <- model[[1]] %>%  arrange(`Test MAE`) %>% head(num_top)
+    model_mean_mae <- stock_level_predictions$`Test MAE` %>% mean()
+    model_mean_rmse <- stock_level_predictions$`Test RMSE` %>% mean()
+    
+    model_performance %<>% bind_rows(
+      tibble(
+        "Model name"               = model[[2]],
+        "RMSE top stocks"          = model_mean_rmse,
+        "MAE top stocks"           = model_mean_mae)
+    )
+    
+
+  }
+  
+  
+  naive_0_benchmark_predictions <- stock_level_predictions_always_zero(selected_test_df)
+  naive_0_benchmark_mae <- naive_0_benchmark_predictions$`Test MAE` %>% mean()
+  naive_0_benchmark_rmse <- naive_0_benchmark_predictions$`Test RMSE` %>% mean()
+  model_performance %<>% bind_rows(
+    tibble(
+      "Model name"               = "Zero prediction naive model",
+      "RMSE top stocks"          = naive_0_benchmark_rmse,
+      "MAE top stocks"           = naive_0_benchmark_mae)
+  )
+  
+  return (model_performance)
+  
 }
 
 
-##### Monthly predictions
+selected_stocks_knn            <- stock_level_predictions_caret(test_df_scaled, knn_model, verbose = T)
+selected_stocks_bayesian_ridge <- stock_level_predictions_caret(test_df_scaled, bayesian_ridge_model)
+selected_stokcks_gbm           <- stock_level_predictions_caret(test_df_scaled, gbm_model)
+
+selected_stocks_nn_1_layer  <- stock_level_predictions_nn(test_df, best_model_nn_1_layer_all[[1]]) 
+selected_stocks_nn_2_layers <- stock_level_predictions_nn(test_df, best_model_nn_2_layers_all[[1]]) 
+selected_stocks_nn_3_layers <- stock_level_predictions_nn(test_df, best_model_nn_3_layers_all[[1]]) 
+selected_stocks_nn_4_layers <- stock_level_predictions_nn(test_df, best_model_nn_4_layers_all[[1]]) 
+
+nn_models <- list(
+  list(selected_stocks_nn_1_layer, "Neural Network 1 hidden layer"), 
+  list(selected_stocks_nn_2_layers, "Neural Network 2 hidden layers"),
+  list(selected_stocks_nn_3_layers, "Neural Network 3 hidden layers"),
+  list(selected_stocks_nn_4_layers, "Neural Network 4 hidden layers")
+)
+
+
+caret_models <- list(
+  list(selected_stokcks_gbm, "Gradient Boosting machine"),
+  list(selected_stocks_knn, "K-nearest neighbors"),
+  list(selected_stocks_bayesian_ridge, "Bayesian ridge regression")
+)
+
+model_metrics_stock_level <- mean_metric_stock_level(100, test_df_scaled, nn_models, caret_models) %>% arrange(`MAE top stocks`)
+
+save(model_metrics_stock_level, file = "model_results/stock_level_performance.Rdata")
+
+
+model_metrics_stock_level %>% 
+  kable(caption = "Model performance on 20 most predictable stocks", 
+        digits  = 2)  %>% 
+  kable_classic(full_width = F, 
+                html_font = "Times New Roman") %>% 
+  save_kable("images/model_performance_stock_level.png", 
+             zoom = 3, 
+             density = 1900)
+
+
+### Based on best performing model, which stocks are predictable ###
+
+selected_stocks_nn_1_layer %>% 
+  kable(caption = "20 stocks of highest predictability", 
+        digits  = 2)  %>% 
+  kable_classic(full_width = F, 
+                html_font = "Times New Roman") %>% 
+  save_kable("images/predictable_stocks.png", 
+             zoom = 1.5, 
+             density = 1900)
+
+
+################################################### Evaluation period ##################################
+
+
+##### Monthly predictions ######################
 
 
 
-predict_monthly_returns <- function(model, company, selection_data) {
+predict_monthly_returns_nn <- function(model, stocks, selection_data) {
   
+  data_selected_stocks <- selection_data %>% 
+    filter(permno %in% stocks)
+  
+  stock_predictions <- (model %>% predict(data_selected_stocks %>% select(-retx)))[,1]
+  
+  data_selected_companies %<>%
+    mutate(predicted_returns = stock_predictions)
+  
+  return(data_selected_stocks)
   
   
 }
+
+
+stock_predictions <- predict_monthly_returns_nn(se)
+
+plot_monthly_returns <- function(stock_predictions) {
+  #'
+  #'Plots series of observed and predicted returns.
+  stock_predictions %>% 
+    select(date, stock_predictions, retx) %>% 
+    pivot_longer(names_to = "type",
+                 values_to = "returns") %>% 
+  ggplot() +
+    geom_line(aes(x = date, y = returns, col = "type"), lwd = 1.06) +
+    guides(colour = guide_legend("Series name")) +
+    theme_bw() +
+    theme(legend.position = "bottom") +
+    labs(x = "Date", y = "Returns", title ="Predicted vs observed return in 2018-2019") +
+    scale_colour_manual(values=c("orange"))
+  
+}
+
+##### Calculate evaluation period MAE
+
+
+evaluation_mae <- postResample(stock_predictions$predicted_returns, stock_predictions$retx)
+
+tibble("Model" = "insert model",
+       "Evaluation period mae" = evaluation_mae[[3]]) %>% 
+  kable(caption = "Performance metric in evaluation period", 
+        digits  = 4) %>% 
+  kable_classic(full_width = F, 
+                html_font  = "Times New Roman")  %>% 
+  save_kable("images/evaluation_period_mae.png", 
+             zoom = 3, 
+             density = 1900)
+
 
 
 
