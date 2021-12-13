@@ -385,51 +385,7 @@ all_company_metrics <- function(selected_test_df) {
 
 
 
-ensemble_metrics <- function(nn_model_metrics, caret_model_metrics) {
-  
-  ensemble_metrics <- tibble()
-  
-  for (model in caret_models) {
-    stock_level_predictions <- model[[1]] 
-    if (ensemble_metrics %>% nrow() == 0 ) ensemble_metrics <-  stock_level_predictions
-    else {
-      ensemble_metrics %<>% mutate(`Test MAE` = `Test MAE` + )
-      
-    
-    }
-    model_mean_mae <- stock_level_predictions$`Test MAE` %>% mean()
-    model_mean_rmse <- stock_level_predictions$`Test RMSE` %>% mean()
-    
-    model_performance %<>% bind_rows(
-      tibble(
-        "Model name"               = model[[2]],
-        "RMSE top stocks"          = model_mean_rmse,
-        "MAE top stocks"           = model_mean_mae)
-    )
-    
-    
-  }
-  for (model in nn_models) {
-    stock_level_predictions <- model[[1]] %>%  arrange(`Test MAE`) %>% head(num_top)
-    model_mean_mae <- stock_level_predictions$`Test MAE` %>% mean()
-    model_mean_rmse <- stock_level_predictions$`Test RMSE` %>% mean()
-    
-    model_performance %<>% bind_rows(
-      tibble(
-        "Model name"               = model[[2]],
-        "RMSE top stocks"          = model_mean_rmse,
-        "MAE top stocks"           = model_mean_mae)
-    )
-    
-    
-  }
-  
-  
-  
-  
-  
-}
-
+#always_0_stocks <- select_stocks_always_0(test_df_scaled)
 
 
 
@@ -634,26 +590,9 @@ stock_predictions <- predict_monthly_returns_nn(best_model_nn_2_layers_all[[1]],
 ##### Calculate evaluation period MAE
 
 
-evaluation_mae <- postResample(stock_predictions$predicted_returns, stock_predictions$retx)
+postResample(stock_predictions$predicted_returns, stock_predictions$retx)
 
-evaluaton_naive_benchmark <- postResample(rep(0, nrow(stock_predictions)), stock_predictions$retx)
-
-
-## Evaluation period table
-
-tibble("Model" = c("Two hidden-layer neural network", "Naive 0-benchmark"),
-       "Evaluation RMSE" = c(evaluation_mae[[1]], evaluaton_naive_benchmark[[1]]),
-       "Evaluaton MAE" =  c(evaluation_mae[[3]], evaluaton_naive_benchmark[[3]])) %>% 
-  kable(caption = "Performance metric in evaluation period of Two Hidden-Layer Neural Network", 
-        digits  = 4) %>% 
-  kable_classic(full_width = F, 
-                html_font  = "Times New Roman")  %>% 
-  save_kable("images/evaluation_period_mae.png", 
-             zoom = 3, 
-             density = 1900)
-  
-
-
+postResample(rep(0, nrow(stock_predictions)), stock_predictions$retx)
 
 
 
@@ -727,7 +666,15 @@ plot_monthly_returns_companies(stock_predictions,  two_layer_nn_predictable_stoc
 ggsave(filename = "images/evalution_plot_5_most_predictable_stocks.png", scale = 2, dpi = 500, width = 5, height = 5)
 
 
-
+tibble("Model" = "insert model",
+       "Evaluation period mae" = evaluation_mae[[3]]) %>% 
+  kable(caption = "Performance metric in evaluation period", 
+        digits  = 4) %>% 
+  kable_classic(full_width = F, 
+                html_font  = "Times New Roman")  %>% 
+  save_kable("images/evaluation_period_mae.png", 
+             zoom = 3, 
+             density = 1900)
 
 
 
