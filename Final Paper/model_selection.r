@@ -97,11 +97,10 @@ test_df_reduced_scaled <- test_df_reduced %>% dplyr::select(-costat,  -retx, -pe
 ######################### Load or run models ###################################
 ################################################################################
 
-# In order to save run time one can choose to load the model results
-load(file = "models/models.Rdata") 
 
-
-
+" Load pretrained models, or run all models from scratch
+  WARNING: This will take several hours on a high-end computer
+"
 load_models <- function() {
   
   load(file = "models/models.Rdata") # Load knn, gbm, ridge regression
@@ -110,9 +109,15 @@ load_models <- function() {
   load(file = "models/1_nn_layer_model_history.Rdata")
   best_model_nn_1_layer_all <- list( load_model_hdf5("models/1_layer_nn_model.hdf5"), best_model_nn_1_layer_history)
   
-  load(file = "models/2_nn_layer_model_all.Rdata")
-  best_model_nn_2_layer_all <- load_model_hdf5("models/2_layer_nn_model.hdf5")
- 
+  load(file = "models/2_nn_layers_model_history.Rdata")
+  best_model_nn_2_layers_all <- list( load_model_hdf5("models/2_layers_nn_model.hdf5"), best_model_nn_2_layers_history)
+  
+  load(file = "models/3_nn_layers_model_history.Rdata")
+  best_model_nn_3_layers_all <- list( load_model_hdf5("models/3_layers_nn_model.hdf5"), best_model_nn_3_layers_history)
+  
+  load(file = "models/4_nn_layers_model_history.Rdata")
+  best_model_nn_4_layers_all <- list( load_model_hdf5("models/4_layers_nn_model.hdf5"), best_model_nn_4_layers_history)
+  
   
 }
 
@@ -154,6 +159,7 @@ build_nn_model_5_layers <- function(selected_train_df, selected_spec, batch_norm
   
   output <- input %>% 
     layer_dense_features(dense_features(selected_spec)) %>% 
+    layer_batch_normalization() %>% 
     layer_dense(units = 32, activation = "relu") %>%
     layer_dropout(dropout_rate)
   
@@ -191,6 +197,7 @@ build_nn_model_4_layers <- function(selected_train_df, selected_spec, batch_norm
   
   output <- input %>% 
     layer_dense_features(dense_features(selected_spec)) %>% 
+    layer_batch_normalization() %>% 
     layer_dense(units = 32, activation = "relu") %>%
     layer_dropout(dropout_rate)
   
@@ -207,7 +214,7 @@ build_nn_model_4_layers <- function(selected_train_df, selected_spec, batch_norm
     layer_dropout(dropout_rate)
   
   if (batch_normalization == T) {output %<>% layer_batch_normalization()}
-    
+  
   output %<>% layer_dense(units = 4) 
   
   
@@ -225,20 +232,21 @@ build_nn_model_3_layers <- function(selected_train_df, selected_spec, batch_norm
   
   output <- input %>% 
     layer_dense_features(dense_features(selected_spec)) %>% 
+    layer_batch_normalization() %>% 
     layer_dense(units = 32, activation = "relu") %>%
     layer_dropout(dropout_rate)
   
-    if (batch_normalization == T) {output %<>% layer_batch_normalization()}
+  if (batch_normalization == T) {output %<>% layer_batch_normalization()}
   
-    output  %<>% 
-      layer_dense(units = 16, activation = "relu") %>%
-      layer_dropout(dropout_rate)
-    
-    if (batch_normalization == T) {output %<>% layer_batch_normalization()}
-    output %<>% 
-      layer_dense(units = 8) 
-
-    
+  output  %<>% 
+    layer_dense(units = 16, activation = "relu") %>%
+    layer_dropout(dropout_rate)
+  
+  if (batch_normalization == T) {output %<>% layer_batch_normalization()}
+  output %<>% 
+    layer_dense(units = 8) 
+  
+  
   
   model <- keras_model(input, output)
   return(model)
@@ -251,13 +259,14 @@ build_nn_model_3_layers <- function(selected_train_df, selected_spec, batch_norm
 
 build_nn_model_2_layers <- function(selected_train_df, selected_spec, batch_normalization, dropout_rate) {
   
-
-
-
+  
+  
+  
   input <- layer_input_from_dataset(selected_train_df %>% dplyr::select(-retx))
   
   output <- input %>% 
     layer_dense_features(dense_features(selected_spec)) %>% 
+    layer_batch_normalization() %>% 
     layer_dense(units = 32, activation = "relu") %>%
     layer_dropout(dropout_rate)
   
@@ -268,7 +277,7 @@ build_nn_model_2_layers <- function(selected_train_df, selected_spec, batch_norm
   
   
   model <- keras_model(input, output)
-
+  
   return(model)
   
 }
@@ -283,6 +292,7 @@ build_nn_model_1_layer <- function(selected_train_df, selected_spec) {
   
   output <- input %>% 
     layer_dense_features(dense_features(selected_spec)) %>% 
+    layer_batch_normalization() %>% 
     layer_dense(units = 32) 
   
   model <- keras_model(input, output)
@@ -307,7 +317,7 @@ build_model <- function(selected_train_df, selected_spec, num_layers, batch_norm
   }
   else if (num_layers == 3) {
     output_model = build_nn_model_3_layers(selected_train_df, selected_spec, batch_normalization, dropout_rate)
-   
+    
   }
   else if (num_layers == 4) {
     output_model = build_nn_model_4_layers(selected_train_df, selected_spec, batch_normalization, dropout_rate)
@@ -318,7 +328,7 @@ build_model <- function(selected_train_df, selected_spec, num_layers, batch_norm
     
   }
   
-
+  
   return (output_model)
 }
 
@@ -407,7 +417,7 @@ grid_search_nn_model_generaL_optimizer <- function(model_train_df, dropout_rates
 
 ## Single layer
 
-best_model_nn_1_layer_test <- grid_search_nn_model_generaL_optimizer(train_df_reduced_scaled, 
+best_model_nn_1_layer_test <- grid_search_nn_model_generaL_optimizer(train_df_reduced, 
                                                                      dropout_rates = list(0),
                                                                      num_layers = 1,
                                                                      batch_sizes = list(300, 500, 1000, 7000),
@@ -432,14 +442,14 @@ postResample(predictions_1_nn_model[ , 1], test_df_reduced$retx)
 ## Single layer
 
 best_model_nn_2_layers_test <- grid_search_nn_model_generaL_optimizer(train_df_reduced_scaled, 
-                                                                     dropout_rates = list(0, 0.3, 0.4),
-                                                                     num_layers = 2,
-                                                                     batch_sizes = list(300, 500, 1000, 7000),
-                                                                     epochs = 200,
-                                                                     learning_rates = list(0.005, 0.1, 0.4),
-                                                                     patience_list = list(1, 2,10, 5, 20,25),
-                                                                     verbose = 0
-                                                                     
+                                                                      dropout_rates = list(0, 0.3, 0.4),
+                                                                      num_layers = 2,
+                                                                      batch_sizes = list(300, 500, 1000, 7000),
+                                                                      epochs = 200,
+                                                                      learning_rates = list(0.005, 0.1, 0.4),
+                                                                      patience_list = list(1, 2,10, 5, 20,25),
+                                                                      verbose = 0
+                                                                      
 )
 
 
@@ -464,7 +474,7 @@ best_model_nn_3_layer_test <- grid_search_nn_model_generaL_optimizer(train_df_re
                                                                      
 )
 
-                                                                     
+
 
 
 
@@ -537,39 +547,39 @@ make_0_benchmark(test_df)
 
 
 
-best_model_nn_1_layer_all  <- grid_search_nn_model_generaL_optimizer(train_df_scaled, 
-                                                                    dropout_rates = list(0),
-                                                                    num_layers = 1,
-                                                                    batch_sizes = list(300, 500, 1000),
-                                                                    epochs = 200,
-                                                                    learning_rates = list(0.005, 0.1, 0.4, 0.6),
-                                                                    patience_list = list(1, 2,10, 5, 20),
-                                                                    verbose = 0
-                                                                                                
+best_model_nn_1_layer_all  <- grid_search_nn_model_generaL_optimizer(train_df, 
+                                                                     dropout_rates = list(0),
+                                                                     num_layers = 1,
+                                                                     batch_sizes = list(300, 500, 1000),
+                                                                     epochs = 200,
+                                                                     learning_rates = list(0.005, 0.1, 0.4),
+                                                                     patience_list = list(1, 2,10, 5, 15),
+                                                                     verbose = 0
+                                                                     
 )
 
 
 
 
 
-best_model_nn_2_layers_all <-  grid_search_nn_model_generaL_optimizer(train_df_scaled, 
-                                                                       dropout_rates = list(0, 0.25, 0.4),
-                                                                       num_layers = 2,
-                                                                       batch_sizes = list(500, 1000, 7000),
-                                                                       epochs = 200,
-                                                                       learning_rates = list(0.005, 0.1, 0.4),
-                                                                       patience_list = list(1, 5,10, 20),
-                                                                       verbose = 0
-                                                                       
+best_model_nn_2_layers_all <-  grid_search_nn_model_generaL_optimizer(train_df, 
+                                                                      dropout_rates = list(0, 0.25, 0.4),
+                                                                      num_layers = 2,
+                                                                      batch_sizes = list(500, 1000, 2000),
+                                                                      epochs = 200,
+                                                                      learning_rates = list(0.005, 0.1, 0.4),
+                                                                      patience_list = list(1, 5, 20),
+                                                                      verbose = 0
+                                                                      
 )
 
 
 
 
-best_model_nn_3_layers_all <- grid_search_nn_model_generaL_optimizer(train_df_scaled, 
+best_model_nn_3_layers_all <- grid_search_nn_model_generaL_optimizer(train_df, 
                                                                      dropout_rates = list(0, 0.25, 0.4),
                                                                      num_layers = 3,
-                                                                     batch_sizes = list(500, 1000, 7000),
+                                                                     batch_sizes = list(500, 1000, 2000),
                                                                      epochs = 200,
                                                                      learning_rates = list(0.005, 0.1, 0.4),
                                                                      patience_list = list(1, 5, 20),
@@ -577,10 +587,10 @@ best_model_nn_3_layers_all <- grid_search_nn_model_generaL_optimizer(train_df_sc
                                                                      
 )
 
-best_model_nn_4_layers_all <- grid_search_nn_model_generaL_optimizer(train_df_scaled, 
+best_model_nn_4_layers_all <- grid_search_nn_model_generaL_optimizer(train_df, 
                                                                      dropout_rates = list(0,0.25, 0.4),
                                                                      num_layers = 4,
-                                                                     batch_sizes = list(500, 1000, 7000),
+                                                                     batch_sizes = list(500, 1000, 2000),
                                                                      epochs = 200,
                                                                      learning_rates = list(0.005, 0.1, 0.4),
                                                                      patience_list = list(1, 5, 20),
@@ -592,10 +602,10 @@ best_model_nn_4_layers_all <- grid_search_nn_model_generaL_optimizer(train_df_sc
 
 
 
-best_model_nn_5_layers_all <- grid_search_nn_model_generaL_optimizer(train_df_scaled, 
+best_model_nn_5_layers_all <- grid_search_nn_model_generaL_optimizer(train_df, 
                                                                      dropout_rates = list(0,  0.25, 0.4),
                                                                      num_layers = 5,
-                                                                     batch_sizes = list(500, 1000, 7000),
+                                                                     batch_sizes = list(500, 1000, 2000),
                                                                      epochs = 200,
                                                                      learning_rates = list(0.005, 0.1, 0.4),
                                                                      patience_list = list(1, 5, 20),
@@ -613,30 +623,30 @@ best_model_nn_5_layers_all <- grid_search_nn_model_generaL_optimizer(train_df_sc
 ## 1 NN
 
 
-predictions_1_nn_model <- best_model_nn_1_layer_all[[1]] %>% predict(test_df_scaled %>% dplyr::select(-retx, -permno))
+predictions_1_nn_model <- best_model_nn_1_layer_all[[1]] %>% predict(test_df %>% dplyr::select(-retx, -permno))
 predictions_1_nn_model[ , 1]
 
-postResample(predictions_1_nn_model[ , 1], test_df_scaled$retx)
+postResample(predictions_1_nn_model[ , 1], test_df$retx)
 
 
 ## 2 NN
-predictions_2_nn_model <- best_model_nn_2_layers_all[[1]] %>% predict(test_df_scaled %>% dplyr::select(-retx, -permno))
+predictions_2_nn_model <- best_model_nn_2_layers_all[[1]] %>% predict(test_df %>% dplyr::select(-retx, -permno))
 predictions_2_nn_model[ , 1]
 
-postResample(predictions_2_nn_model[ , 1], test_df_scaled$retx)
+postResample(predictions_2_nn_model[ , 1], test_df$retx)
 
 ## 3 NN
-predictions_3_nn_model <- best_model_nn_3_layers_all[[1]] %>% predict(test_df_scaled %>% dplyr::select(-retx, -permno))
+predictions_3_nn_model <- best_model_nn_3_layers_all[[1]] %>% predict(test_df %>% dplyr::select(-retx, -permno))
 predictions_3_nn_model[ , 1]
 
-postResample(predictions_3_nn_model[ , 1], test_df_scaled$retx)
+postResample(predictions_3_nn_model[ , 1], test_df$retx)
 
 
 ## 4 NN
-predictions_4_nn_model <- best_model_nn_4_layers_all[[1]] %>% predict(test_df_scaled %>% dplyr::select(-retx, -permno))
+predictions_4_nn_model <- best_model_nn_4_layers_all[[1]] %>% predict(test_df %>% dplyr::select(-retx, -permno))
 predictions_4_nn_model[ , 1]
 
-postResample(predictions_4_nn_model[ , 1], test_df_scaled$retx)
+postResample(predictions_4_nn_model[ , 1], test_df$retx)
 
 
 ################# Saving models #########################
@@ -656,20 +666,20 @@ save_nn_models <- function() {
   
   best_model_nn_2_layers_history <- best_model_nn_2_layers_all[[2]]
   save(best_model_nn_2_layers_history, file = "models/2_nn_layers_model_history.Rdata") # Save model history
-  best_model_nn_2_layers_all[[1]]  %>% save_model_hdf5("models/2_layer_nn_model.hdf5") # Save model
+  best_model_nn_2_layers_all[[1]]  %>% save_model_hdf5("models/2_layers_nn_model.hdf5") # Save model
   
   
   ## 3 NN
   best_model_nn_3_layers_history <- best_model_nn_3_layers_all[[2]]
   save(best_model_nn_3_layers_history, file = "models/3_nn_layers_model_history.Rdata") # Save model history
-  best_model_nn_3_layers_all[[1]]  %>% save_model_hdf5("models/3_layer_nn_model.hdf5") # Save model
+  best_model_nn_3_layers_all[[1]]  %>% save_model_hdf5("models/3_layers_nn_model.hdf5") # Save model
   
   
   ## 4 NN
   best_model_nn_4_layers_history <- best_model_nn_4_layers_all[[2]]
   save(best_model_nn_4_layers_history, file = "models/4_nn_layer_model_history.Rdata") # Save model history
   best_model_nn_4_layers_all[[1]]  %>% save_model_hdf5("models/4_layers_nn_model.hdf5") # Save model
-
+  
 }
 
 
@@ -709,12 +719,12 @@ tunegrid_knn <- expand.grid(k = 5:25)
 
 # Training the KNN model and evaluating with MAE (Mean Average Error)
 knn_model <- caret::train(retx ~ .,
-                   data          = train_df_scaled,
-                   trControl     = train_control,
-                   method        = "knn",
-                   metric        = "MAE",                             
-                   tuneLength      = 20,
-                   allowParalell = TRUE)
+                          data          = train_df_scaled,
+                          trControl     = train_control,
+                          method        = "knn",
+                          metric        = "MAE",                             
+                          tuneLength      = 20,
+                          allowParalell = TRUE)
 
 
 # Looking at the KNN-model
@@ -739,10 +749,10 @@ postResample(knn_preds, test_df_scaled$retx)
 # Bayesian ridge regression ----------------------------------------------------
 # Training the Ridge-model
 bayesian_ridge_model <- caret::train(retx ~ ., 
-                              data       = train_df_scaled, 
-                              trControl  = train_control, 
-                              metric     = "MAE",
-                              method     = "bridge")
+                                     data       = train_df_scaled, 
+                                     trControl  = train_control, 
+                                     metric     = "MAE",
+                                     method     = "bridge")
 
 
 # Looking at the Ridge model
@@ -768,11 +778,11 @@ tunegrid_gam <-  expand.grid(method = c("GCV", "REML"),
 
 # Training the GAM-model
 gam_model <- caret::train(retx ~ ., 
-                   data       = train_df_scaled, 
-                   trControl  = train_control, 
-                   tuneLength   = 10,
-                   metric     = "MAE",
-                   method     = "gam")
+                          data       = train_df_scaled, 
+                          trControl  = train_control, 
+                          tuneLength   = 10,
+                          metric     = "MAE",
+                          method     = "gam")
 
 
 gam_preds <- predict(gam_model, test_df_scaled)
@@ -789,11 +799,11 @@ tunegrid_gbm <-  expand.grid(interaction.depth = c(1, 5, 9),
 
 # Training the GBM-model
 gbm_model <- caret::train(retx ~ .,
-                   data       = train_df_scaled,
-                   method     = "gbm",
-                   metric     = "MAE",                                             
-                   tuneLength   = 25,
-                   trControl  = train_control)
+                          data       = train_df_scaled,
+                          method     = "gbm",
+                          metric     = "MAE",                                             
+                          tuneLength   = 25,
+                          trControl  = train_control)
 
 
 gbm_preds <- predict(gbm_model, test_df_scaled)

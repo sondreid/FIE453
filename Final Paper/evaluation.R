@@ -350,7 +350,7 @@ selected_stock_company_info <- function(selected_stocks, test_df,  n) {
 
 #always_0_stocks <- select_stocks_always_0(test_df_scaled)
 
-#selected_stocks_nn <- stock_level_predictions_nn(test_df_scaled, best_model_nn_1_layer_all[[1]]) %>%  arrange(`Test MAE`)
+selected_stocks_nn <- stock_level_predictions_nn(test_df_scaled, best_model_nn_1_layer_all[[1]]) %>%  arrange(`Test MAE`)
 
 
 
@@ -412,6 +412,9 @@ mean_metric_stock_level <- function(num_top, selected_test_df,  nn_models, caret
   return (model_performance)
   
 }
+
+## Stock level predictions 
+
 
 nn_models <- list(
   list(best_model_nn_1_layer_all[[1]], "Neural Network 1 hidden layer"), 
