@@ -7,7 +7,9 @@
 
 
 
-
+############### 
+# Kan kanskje slettes
+##########
 evaluate_models <- function(modelList, train_df, test_df) {
   
   #' @description     Function that evaluates the model both on the training set
@@ -102,11 +104,6 @@ evaluate_models_nn <- function(modelList, train_df, test_df) {
   
 }
 
-
-
-modelList <- list(knn_model,gbm_model, bayesian_ridge_model)   # List of all models
-"Uncomment to perform model evaluation"
-model_evaluation <- evaluate_models(modelList, train_df_scaled,  test_df_scaled)  %>%  arrange(`Test MAE`)
 
 
 
@@ -204,6 +201,7 @@ stock_level_predictions_caret <- function(selected_test_df, selected_model, verb
   
   company_predictability <- tibble()
   num_companies <- length(companies)
+  i <- 0
   for (company in companies) {
     
     i <- i+1
@@ -308,13 +306,13 @@ stock_level_predictions_always_zero <- function(selected_test_df) {
 
 
 
-selected_stock_company_info <- function(selected_stocks, test_df,  n) {
+selected_stock_company_info <- function(selected_stocks, test_df) {
   #' @description:    Makes a summary of feature means of selcted stocks (companies)
   #' 
   #' @sele
   #' @test_df: orginal test set from which the selcted companies are drawn
   #' @n: number of included companies
-  selected_stocks <- selected_stocks %>% head(n)
+  selected_stocks <- selected_stocks 
   company_info <- tibble()
   for (i in 1:nrow(selected_stocks)) {
     
@@ -352,6 +350,7 @@ selected_stock_company_info <- function(selected_stocks, test_df,  n) {
 
 
 all_company_metrics <- function(selected_test_df) {
+  #' Returns mean financial indicators of all stocks in input test dataset
   mean_marketcap <- selected_test_df %>%
     summarise(mean_marketcap = mean(marketcap))
   
@@ -374,12 +373,12 @@ all_company_metrics <- function(selected_test_df) {
   
   
   all_companies_summary %>% 
-    kable(caption = "Company mean metrics of all companies in test set", 
+    kable(caption = "Mean financial indicators of all test companies", 
           digits  = 2)  %>% 
     kable_classic(full_width = F, 
                   html_font = "Times New Roman") %>% 
     save_kable("images/all_company_summary.png", 
-               zoom = 1.5, 
+               zoom = 3, 
                density = 1900)
   
 }
@@ -391,7 +390,7 @@ all_company_metrics <- function(selected_test_df) {
 
 
 
-mean_metric_stock_level <- function(num_top, selected_test_df,  nn_model_metrics, caret_model_metrics) {
+mean_metric_stock_level <- function(num_top,  selected_test_df, nn_model_metrics, caret_model_metrics) {
   
   #'
   #'
@@ -443,7 +442,7 @@ mean_metric_stock_level <- function(num_top, selected_test_df,  nn_model_metrics
 }
 
 
-selected_stocks_knn            <- stock_level_predictions_caret(test_df_scaled, knn_model)
+selected_stocks_knn            <- stock_level_predictions_caret(test_df_scaled, knn_model, verbose = T)
 selected_stocks_bayesian_ridge <- stock_level_predictions_caret(test_df_scaled, bayesian_ridge_model)
 selected_stokcks_gbm           <- stock_level_predictions_caret(test_df_scaled, gbm_model)
 
@@ -452,7 +451,7 @@ selected_stocks_nn_2_layers <- stock_level_predictions_nn(test_df, best_model_nn
 selected_stocks_nn_3_layers <- stock_level_predictions_nn(test_df, best_model_nn_3_layers_all[[1]]) 
 selected_stocks_nn_4_layers <- stock_level_predictions_nn(test_df, best_model_nn_4_layers_all[[1]]) 
 
-nn_models <- list(
+nn_stock_level_mae <- list(
   list(selected_stocks_nn_1_layer, "Neural Network 1 hidden layer"), 
   list(selected_stocks_nn_2_layers, "Neural Network 2 hidden layers"),
   list(selected_stocks_nn_3_layers, "Neural Network 3 hidden layers"),
@@ -460,20 +459,24 @@ nn_models <- list(
 )
 
 
-caret_models <- list(
+caret_stock_level_mae <- list(
   list(selected_stokcks_gbm, "Gradient Boosting machine"),
   list(selected_stocks_knn, "K-nearest neighbors"),
   list(selected_stocks_bayesian_ridge, "Bayesian ridge regression")
 )
 
-model_metrics_stock_level <- mean_metric_stock_level(100, test_df_scaled, nn_models, caret_models) %>% arrange(`MAE top stocks`)
 
-save(model_metrics_stock_level, file = "model_results/stock_level_performance.Rdata")
+#model_metrics_stock_level <- mean_metric_stock_level(30, test_df,  nn_stock_level_mae, caret_stock_level_mae) %>% arrange(`MAE top stocks`)
 
+#save(nn_stock_level_mae, caret_stock_level_mae, model_metrics_stock_level,  file = "model_results/stock_level_performance.Rdata")
+
+load(file = "model_results/stock_level_performance.Rdata")
+
+### Model performance on 30 most predictable stocks
 
 model_metrics_stock_level %>% 
-  kable(caption = "Model performance on 20 most predictable stocks", 
-        digits  = 2)  %>% 
+  kable(caption = "Model performance on 30 most predictable stocks", 
+        digits  = 4)  %>% 
   kable_classic(full_width = F, 
                 html_font = "Times New Roman") %>% 
   save_kable("images/model_performance_stock_level.png", 
@@ -481,16 +484,74 @@ model_metrics_stock_level %>%
              density = 1900)
 
 
+#### Training process graph of optimal neural network model #####
+
+
+
+best_model_nn_2_layers_all[[2]] %>% 
+  plot() +
+  theme_bw() +
+  xlim(0, 100) +
+  theme(legend.position = "bottom") +
+  labs(x = "Epoch", title ="Training process of two hidden layer neural network") +
+  scale_colour_manual(values=c("orange", "#fa3200", "#fa9664"))
+ggsave(filename = "images/neural_net_training.png", scale = 1, dpi = 1000)
+
+
+
+
+
 ### Based on best performing model, which stocks are predictable ###
 
-selected_stocks_nn_1_layer %>% 
-  kable(caption = "20 stocks of highest predictability", 
-        digits  = 2)  %>% 
+nn_stock_level_mae[[2]][[1]] %>% 
+  arrange(`Test MAE`) %>% 
+  head(30) %>% 
+  mutate("Company name" = sapply(`Company name`, stringr::str_to_title)) %>% 
+  kable(caption = "30 stocks of highest predictability", 
+        digits  = 5)  %>% 
   kable_classic(full_width = F, 
                 html_font = "Times New Roman") %>% 
   save_kable("images/predictable_stocks.png", 
-             zoom = 1.5, 
+             zoom = 3, 
              density = 1900)
+
+
+#### Predictable companies financial indicators  ###
+
+
+selected_stock_company_info(nn_stock_level_mae[[2]][[1]]  %>%  arrange(`Test MAE`) %>% 
+                              head(30), test_df ) %>% 
+  kable(caption = "Financial indicators of 30 most predictable stocks", 
+        digits  = 5)  %>% 
+  kable_classic(full_width = F, 
+                html_font = "Times New Roman") %>% 
+  save_kable("images/predictable_stocks_characteristics.png", 
+             zoom = 3, 
+             density = 1900)
+
+
+#### Predictable companies financial indicators, average indicator values ###
+
+selected_stock_company_info(nn_stock_level_mae[[2]][[1]]  %>%  arrange(`Test MAE`) %>% 
+                              head(30), test_df ) %>% 
+  summarise("Mean market cap" = mean(`Mean market cap`), 
+            "Mean volume" = mean(`Mean volume`), 
+            "Mean cash" = mean(`Mean cash`), 
+            "Mean operating income" = mean(`Mean operating income`), ) %>% 
+  kable(caption = "Mean financial indicators of 30 most predictable stocks", 
+        digits  = 5)  %>% 
+  kable_classic(full_width = F, 
+                html_font = "Times New Roman") %>% 
+  save_kable("images/predictable_stocks_characteristics_mean.png", 
+             zoom = 3, 
+             density = 1900)
+
+## Average indicator values all test stocks ##### 
+
+
+all_company_metrics(test_df)
+
+
 
 
 ################################################### Evaluation period ##################################
@@ -500,12 +561,12 @@ selected_stocks_nn_1_layer %>%
 
 
 
-predict_monthly_returns_nn <- function(model, stocks, selection_data) {
+predict_monthly_returns_nn <- function(model, stocks, evaluation_data) {
   
-  data_selected_stocks <- selection_data %>% 
+  data_selected_stocks <- evaluation_data %>% 
     filter(permno %in% stocks)
   
-  stock_predictions <- (model %>% predict(data_selected_stocks %>% select(-retx)))[,1]
+  stock_predictions <- (model %>% predict(data_selected_stocks %>% dplyr::select(-retx)))[,1]
   
   data_selected_companies %<>%
     mutate(predicted_returns = stock_predictions)
@@ -516,7 +577,9 @@ predict_monthly_returns_nn <- function(model, stocks, selection_data) {
 }
 
 
-stock_predictions <- predict_monthly_returns_nn(se)
+stock_predictions <- predict_monthly_returns_nn(best_model_nn_2_layers_all[[1]], 
+                                                nn_stock_level_mae[[2]][[1]]$`Company identifier`, # Company identifiers of the most predictable companies
+                                                evaluation_data)
 
 plot_monthly_returns <- function(stock_predictions) {
   #'
