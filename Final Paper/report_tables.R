@@ -1,5 +1,5 @@
 
-################################### HYPEPARAMETER TABLES #########################
+################################### Report tables #########################
 library(tidyr)
 library(kableExtra)
 
@@ -39,7 +39,7 @@ tibble("vwretd" = "Market Excess Return", "vol" = "Volume", "shrout" = "Shared O
         digits  = 4) %>% 
   kable_classic(full_width = F, 
                 html_font  = "Times New Roman")  %>% 
-  save_kable("C:/Users/joonl/Downloads/feature_description1.png", 
+  save_kable("images/feature_descriptions.png", 
              zoom = 3, 
              density = 1900)
 
@@ -62,6 +62,6 @@ tibble("Number of layers" = list(2),
   kable_classic(full_width = F, 
                 html_font  = "Times New Roman") %>% 
   save_kable("images/neural_network_optimal_parameters.png", 
-             zoom = 3, 
+             zoom = 4, 
              density = 1900)
 

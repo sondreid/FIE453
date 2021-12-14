@@ -1,5 +1,8 @@
-### KERAS ####
+########################### Keras installation ###
 
+" 
+This file contains the needed code to install a miniconda enviroment and install python packages Tensorflow and Keras
+"
 
 ## First installation
 library(reticulate)
@@ -28,7 +31,7 @@ install_keras(method = "conda" ,envname = "r-reticulate", tensorflow = "gpu")
     
     
     
-### TEST 
+### Verify correctness of keras and tensorflow installation
 
 library(ggplot2)
 library(reshape2)
