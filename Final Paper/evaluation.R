@@ -167,6 +167,8 @@ selected_stock_company_info <- function(selected_stocks, test_df) {
       filter(permno == selected_stocks[i, ]$`Company identifier`) %>% 
       summarise(mean_operating_income = mean(oiadpq))
     
+    
+    
     company_info %<>% bind_rows(
       tibble("Company name" = stringr::str_to_title(selected_stocks[i, ]$`Company name`),
              "Mean market cap" = mean_marketcap$mean_marketcap,
@@ -198,12 +200,19 @@ all_company_metrics <- function(selected_test_df) {
   mean_operating_income <- selected_test_df %>%
     summarise(mean_operating_income = mean(oiadpq))
   
+  all_companies_sd <- test_df  %>% 
+    dplyr::select(retx) %>% 
+    mutate_all(sd) %>% 
+    slice(1) %>% 
+    mutate_all(scales::percent, accuracy = 0.001)
+  
   
   all_companies_summary <- 
     tibble("Mean market cap" = mean_marketcap$mean_marketcap,
            "Mean volume" = mean_volume$mean_volume,
            "Mean cash" = mean_cash$mean_cash,
-           "Mean operating income" = mean_operating_income$mean_operating_income )
+           "Mean operating income" = mean_operating_income$mean_operating_income,
+           "Standard deviation of returns" = all_companies_sd$retx)
   
   
   all_companies_summary %>% 
@@ -331,19 +340,36 @@ stock_level_mae <- list(
 
 load(file = "model_results/stock_level_performance.Rdata")
 
-
-### Ensemble performance metrics 
-
-least_predictable_stocks_ensemble <- ensemble_metrics(stock_level_mae) %>% arrange(`Test MAE`) %>% tail(20)
-most_predictable_stocks_ensemble <- ensemble_metrics(stock_level_mae) %>% arrange(`Test MAE`) %>% head(20) 
-
-
-
-
 ## 2- layer neural network model predictable stocks
 two_layer_nn_predictable_stocks <- stock_level_mae[[2]][[1]] %>% 
   arrange(`Test MAE`) %>% 
   head(30) 
+
+
+
+############# Ensemble performance metrics  ########
+
+least_predictable_stocks_ensemble <- ensemble_metrics(stock_level_mae) %>% arrange(`Test MAE`) %>% tail(50)
+most_predictable_stocks_ensemble <- ensemble_metrics(stock_level_mae) %>% arrange(`Test MAE`) %>% head(50) 
+
+
+#Ensemble table of most and least predictable stocks
+
+tibble( "Stocks" = c("Mean perfomance of 50 most predictable stocks", "Mean perfomance of 50 least predictable stocks"),
+        "RMSE" = c(most_predictable_stocks_ensemble$`Test RMSE` %>% mean(), least_predictable_stocks_ensemble$`Test RMSE` %>% mean()),
+        "MAE" = c(most_predictable_stocks_ensemble$`Test MAE` %>% mean(), least_predictable_stocks_ensemble$`Test MAE` %>% mean())) %>% 
+  
+  kable(caption = "Ensemble model performance on 50 most and least predictable stocks", 
+        digits  = 4)  %>% 
+  kable_classic(full_width = F, 
+                html_font = "Times New Roman") %>% 
+  save_kable("images/differences_in_stock_predictability.png", 
+             zoom = 3, 
+             density = 1900)
+
+
+
+
 
 
 ### Model performance on 30 most predictable stocks
@@ -413,11 +439,24 @@ selected_stock_company_info(two_layer_nn_predictable_stocks, test_df ) %>%
 
 #### Predictable companies financial indicators, average indicator values ###
 
+
+### Standard deviation predictable companies
+
+predictable_stocks_sd <- test_df  %>% 
+  dplyr::filter(permno %in% two_layer_nn_predictable_stocks$`Company identifier`) %>% 
+  dplyr::select(retx) %>% 
+  mutate_all(sd) %>% 
+  slice(1) %>% 
+  mutate_all(scales::percent, accuracy = 0.001)
+
+
+
 selected_stock_company_info(two_layer_nn_predictable_stocks, test_df ) %>% 
   summarise("Mean market cap" = mean(`Mean market cap`), 
             "Mean volume" = mean(`Mean volume`), 
             "Mean cash" = mean(`Mean cash`), 
-            "Mean operating income" = mean(`Mean operating income`), ) %>% 
+            "Mean operating income" = mean(`Mean operating income`),
+            "Standard devation of returns" = predictable_stocks_sd$retx ) %>% 
   kable(caption = "Mean financial indicators of 30 most predictable stocks", 
         digits  = 0)  %>% 
   kable_classic(full_width = F, 
@@ -428,6 +467,11 @@ selected_stock_company_info(two_layer_nn_predictable_stocks, test_df ) %>%
 
 ## Average indicator values all test stocks ##### 
 all_company_metrics(test_df) # Call on function that calculates average financial indicators for all companies in test set
+
+
+
+
+
 
 
 

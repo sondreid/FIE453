@@ -104,8 +104,9 @@ test_df_reduced_scaled <- test_df_reduced %>% dplyr::select(-costat,  -retx, -pe
 load_models <- function() {
   
   load(file = "models/models.Rdata") # Load knn, gbm, ridge regression
-  ## Load NN models
   
+  
+  ## Load NN models
   load(file = "models/1_nn_layer_model_history.Rdata")
   best_model_nn_1_layer_all <- list( load_model_hdf5("models/1_layer_nn_model.hdf5"), best_model_nn_1_layer_history)
   
