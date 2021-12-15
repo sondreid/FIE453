@@ -2,6 +2,36 @@
 ################################################################################
 ########################### MODEL EVALUATION ####################################
 ################################################################################
+# Candidates: 
+## 8, 15, 54
+
+
+####### Variable importance plot #################
+## As performed by the GBM model
+
+most_important_features <- varImp(gbm_model)$importance %>% 
+  as.data.frame() %>% 
+  arrange(desc(Overall))
+
+feature_names <- most_important_features %>% rownames()
+
+
+
+### GBM variable importance
+tibble(variable = feature_names, score = most_important_features$Overall) %>% 
+  head(20) %>% 
+  ggplot(aes(x = reorder(variable, - score), y =  score)) + 
+  geom_bar(stat = "identity") +
+  theme_bw() +
+  theme(legend.position = "bottom") +
+  labs(x = "Features", y = "Variable importance", title ="Variable importance GBM") +
+  scale_colour_manual(values=c("orange"))
+ggsave(filename = "images/variable_importance_gbm.png", scale = 1, dpi = 1500)
+
+
+
+
+
 
 
 
@@ -137,10 +167,10 @@ stock_level_predictions_always_zero <- function(selected_test_df) {
 
 
 selected_stock_company_info <- function(selected_stocks, test_df) {
-  #' @description:    Makes a summary of feature means of selcted stocks (companies)
+  #' @description:    Makes a summary of feature means of selected stocks
   #' 
   #' @sele
-  #' @test_df: orginal test set from which the selcted companies are drawn
+  #' @test_df: original test set from which the selected companies are drawn
   #' @n: number of included companies
   selected_stocks <- selected_stocks 
   company_info <- tibble()
@@ -225,7 +255,8 @@ all_company_metrics <- function(selected_test_df) {
 
 
 ensemble_metrics <- function(model_metrics) {
-  
+  #'
+  #' Average test MAE for all stocks for the input model metrics
   ensemble_metrics <- tibble()
   
   for (model in model_metrics) {
@@ -551,8 +582,12 @@ plot_monthly_returns_single_company <- function(stock_predictions, selected_stoc
     scale_colour_manual(values=c("orange", "black"))
   
 }
+
+
 plot_monthly_returns_single_company(stock_predictions, two_layer_nn_predictable_stocks %>% head(1))
 ggsave(filename = "images/evaluation_plot_most_predictable_stock.png", scale = 1, dpi = 1200)
+
+
 
 
 

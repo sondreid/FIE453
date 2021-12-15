@@ -405,33 +405,4 @@ rm(merged, df_selection, df_selection_reduced) # Remove large datasets from memo
 
 
 
-# Descriptive Statistics -------------------------------------------------------
-
-### Variable importance plot
-
-most_important_features <- varImp(gbm_model)$importance %>% 
-    as.data.frame() %>% 
-    arrange(desc(Overall))
-
-feature_names <- most_important_features %>% rownames()
-
-
-
-### GBM variable importance
-tibble(variable = feature_names, score = most_important_features$Overall) %>% 
-    head(20) %>% 
-    ggplot(aes(x = reorder(variable, - score), y =  score)) + 
-    geom_bar(stat = "identity") +
-    theme_bw() +
-    theme(legend.position = "bottom") +
-    labs(x = "Features", y = "Variable importance", title ="Variable importance GBM") +
-    scale_colour_manual(values=c("orange"))
-ggsave(filename = "images/variable_importance_gbm.png", scale = 1, dpi = 1500)
-
-
-
-
-
-
-
 
