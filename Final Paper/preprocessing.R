@@ -2,7 +2,7 @@
 ########################### Pre-processing #####################################
 ################################################################################
 # Candidates: 
-## REMEMBER TO FILL IN CANDIDATE NUMBERS
+## 8, 15, 54
 
 
 
@@ -26,12 +26,6 @@ library(nnet)
 
 
 set.seed(1)
-
-
-# Set WD -----------------------------------------------------------------------
-#setwd("~/OneDrive - Norges Handelshøyskole/MASTER/FIE453/FinalExam/FIE453/Final Paper")
-
-
 
 
 # Load and read data -----------------------------------------------------------
@@ -413,11 +407,20 @@ rm(merged, df_selection, df_selection_reduced) # Remove large datasets from memo
 
 # Descriptive Statistics -------------------------------------------------------
 
+### Variable importance plot
+
+most_important_features <- varImp(gbm_model)$importance %>% 
+    as.data.frame() %>% 
+    arrange(desc(Overall))
+
+feature_names <- most_important_features %>% rownames()
+
+
 
 ### GBM variable importance
-most_important_features %>% 
+tibble(variable = feature_names, score = most_important_features$Overall) %>% 
     head(20) %>% 
-    ggplot(aes(x = reorder(features, - score$Overall), y =  score$Overall)) + 
+    ggplot(aes(x = reorder(variable, - score), y =  score)) + 
     geom_bar(stat = "identity") +
     theme_bw() +
     theme(legend.position = "bottom") +
@@ -426,98 +429,8 @@ most_important_features %>%
 ggsave(filename = "images/variable_importance_gbm.png", scale = 1, dpi = 1500)
 
 
-# Plotting a correlation matrix and histogram between variables in the data frame
-train_df_reduced %>% 
-    dplyr::select(retx, top_5_most_important_features) %>% 
-    chart.Correlation(histogram = TRUE, method = "pearson")
 
 
-
-
-
-histogram_plot <- function(df){
-    
-    #' @description Function that plots histogram for all the variables in
-    #'              a given data frame
-    #' 
-    #' @param df    Passing a data frame
-    
-    for(i in df %>% colnames()){
-        print(qplot(df[,i], 
-                    xlab = i, 
-                    ylab = "frequency", 
-                    main = paste0("Histogram of ", 
-                                  i %>% toupper()), 
-                    geom = "histogram"))
-    }
-}
-
-relationship_plot <- function(df){
-    
-    #' @description Function that plots multiple relationship plots between
-    #'              dependent variable and independent variables
-    #' 
-    #' @param df    Passing a data frame
-    
-    for(i in df %>% dplyr::select(-retx) %>% colnames()){
-        plot(df[,i], 
-             df$retx, 
-             ylab = "retx", 
-             xlab = i, 
-             main = paste0("Relationship plot between RETX and ", 
-                           i %>% toupper))
-    }
-}
-
-# Plotting histogram for each variables in order to observe its distribution
-train_df_reduced %>% 
-    dplyr::select(retx, top_5_most_important_features) %>% 
-    histogram_plot()
-
-# Plotting the relationship between RETX and all other features
-train_df_reduced %>% 
-    dplyr::select(retx, top_5_most_important_features) %>% 
-    relationship_plot()
-
-
-# Summary statistics -----------------------------------------------------------
-print_summary <- function(df,
-                          title = "",
-                          ndigits = 2,
-                          scientific_notation = FALSE, 
-                          statistics = c("nbr.val", 
-                                         "nbr.null", 
-                                         "nbr.na", 
-                                         "min", 
-                                         "mean", 
-                                         "median", 
-                                         "max", 
-                                         "std.dev")){
-    
-    #' @description                Function that plots the summary statistics in 
-    #'                             table
-    #' 
-    #' @param df                   Passing a data frame
-    #' @param title                Passing a title for caption in table
-    #' @param ndigits              Passing how many digits to show in table
-    #' @param scientific_notation  Passing boolean for scientific notation
-    #' @param statistics           Passing which summary statistics to show
-
-    (df %>%
-        stat.desc() %>% 
-        as.data.frame())[statistics,] %>% 
-        rename_all(toupper) %>% 
-        kbl(digits = ndigits, 
-            format.args = list(scientific = scientific_notation), 
-            caption = title) %>%
-        kable_classic(full_width = F, 
-                      html_font = "Times New Roman")
-}
-
-# Plotting Summary Statistics
-train_df_reduced %>% 
-    dplyr::select(retx, top_5_most_important_variables) %>% 
-    print_summary(title = "Summary Statistics", ndigits = 1)
 
 
 

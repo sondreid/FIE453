@@ -2,10 +2,6 @@
 ################################################################################
 ########################### MODEL EVALUATION ####################################
 ################################################################################
-# Based on model test performance metrics
-
-
-
 
 
 
@@ -359,7 +355,7 @@ tibble( "Stocks" = c("Mean perfomance of 50 most predictable stocks", "Mean perf
         "RMSE" = c(most_predictable_stocks_ensemble$`Test RMSE` %>% mean(), least_predictable_stocks_ensemble$`Test RMSE` %>% mean()),
         "MAE" = c(most_predictable_stocks_ensemble$`Test MAE` %>% mean(), least_predictable_stocks_ensemble$`Test MAE` %>% mean())) %>% 
   
-  kable(caption = "Ensemble model performance on 50 most and least predictable stocks", 
+  kable(caption = "Variation in Stock Predictability: Ensemble Model Predictions", 
         digits  = 4)  %>% 
   kable_classic(full_width = F, 
                 html_font = "Times New Roman") %>% 
@@ -486,6 +482,8 @@ all_company_metrics(test_df) # Call on function that calculates average financia
 
 
 predict_monthly_returns_nn <- function(selected_model, stocks, evaluation_data) {
+  #' Predicts monthly returns in the evaluation period.
+  #' Returns a dataframe of predicted and observed returns
   
   data_selected_stocks <- evaluation_data %>% 
     filter(permno %in% stocks)
@@ -533,7 +531,7 @@ tibble("Model" = c("Two hidden-layer neural network", "Naive 0-benchmark"),
 
 plot_monthly_returns_single_company <- function(stock_predictions, selected_stock) {
   #'
-  #'Plots series of observed and predicted returns.
+  #'Plots series of observed and predicted returns for a single company
   predictions_and_company_info <- stock_predictions %>% 
     dplyr::filter(permno == selected_stock$`Company identifier` ) %>% 
     as_tibble() %>% 
@@ -560,7 +558,7 @@ ggsave(filename = "images/evaluation_plot_most_predictable_stock.png", scale = 1
 
 plot_monthly_returns_companies <- function(stock_predictions, selected_stocks, selected_title, selected_ncol = 2) {
   #'
-  #'Plots series of observed and predicted returns.
+  #'Plots series of observed and predicted returns for all selected stocks
   stock_predictions %>% 
     dplyr::filter(permno %in% selected_stocks$`Company identifier` ) %>% 
     left_join(selected_stocks, by = c("permno" = "Company identifier")) %>% 
